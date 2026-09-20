@@ -1,0 +1,4 @@
+.aurora-container,.aurora-container canvas{width:100%;height:100%;display:block}
+.aurora-container{background:#0c0910}
+.aurora-container canvas{background:#0c0910;opacity:0;transition:opacity 160ms ease}
+.aurora-container.is-ready canvas{opacity:1}

@@ -1,0 +1,223 @@
+:root {
+  color-scheme: dark;
+  --ink: #ededed;
+  --muted: #969696;
+  --line: #292929;
+  --paper: #000;
+  --soft: #0b0b0b;
+  font-family: ui-serif, "Iowan Old Style", "Noto Serif KR", "Apple SD Gothic Neo", "Malgun Gothic", Georgia, serif;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+html { background: #0c0910; color: var(--ink); }
+body { margin: 0; min-width: 320px; background: #0c0910; }
+body, button, input, select { font: inherit; }
+button, input, select { color: inherit; }
+a { color: inherit; text-decoration-color: #6d6d6d; text-underline-offset: .22em; }
+a:hover { text-decoration-color: #ededed; }
+:focus-visible { outline: 1px solid #f4f4f4; outline-offset: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.site-shell { position: relative; min-height: 100vh; isolation: isolate; }
+.aurora-background { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .58; background: #0c0910; }
+.site-shell > *:not(.aurora-background) { position: relative; z-index: 0; }
+.reading-column { background: transparent; border: 0; }
+.top-slot { height: 7.5rem; }
+.topbar {
+  width: min(100% - 3rem, 72rem); height: 7.5rem; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 2rem;
+  transition: opacity 120ms ease;
+}
+.topbar[data-hidden="true"] { opacity: 0; pointer-events: none; visibility: hidden; }
+.brand {
+  margin: 0; flex: 0 0 auto; color: #f5f5f5;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  font-size: clamp(1.65rem, 4vw, 2.15rem); font-weight: 620; letter-spacing: -.025em; line-height: 1; text-decoration: none;
+}
+.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: .9rem; min-width: 0; }
+.top-action, .copy-action, .secondary-action {
+  appearance: none; min-height: 2.5rem; border: 1px solid rgb(205 174 255 / .38); border-radius: .55rem;
+  background: rgb(25 18 34 / .82); padding: .5rem .9rem; line-height: 1.2; cursor: pointer; white-space: nowrap;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif; font-size: .88rem;
+  box-shadow: inset 0 1px rgb(255 255 255 / .09), 0 .4rem 1.2rem rgb(0 0 0 / .16); transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.top-action:hover, .copy-action:hover, .secondary-action:hover { border-color: #d8b4fe; background: rgb(58 36 81 / .92); transform: translateY(-1px); }
+.top-action:disabled { cursor: default; }
+.home-search, .dialog-search, .search-line {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  border-bottom: 1px solid #555;
+}
+.home-search { width: min(44vw, 27rem); border: 1px solid rgb(205 174 255 / .32); border-radius: .55rem; background: rgb(18 13 26 / .76); padding-inline: .65rem; box-shadow: inset 0 1px rgb(255 255 255 / .06); }
+.home-search input, .dialog-search input, .search-line input {
+  width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: .65rem .15rem;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif; font-size: 1rem;
+}
+.home-search:focus-within, .dialog-search:focus-within, .search-line:focus-within { border-color: #ededed; }
+.home-search input:focus-visible, .dialog-search input:focus-visible, .search-line input:focus-visible { outline: 0; }
+.enter-hint { color: #737373; padding-left: .8rem; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .72rem; }
+.reading-column { width: min(100% - 3rem, 45rem); margin: 0 auto; padding: 2.75rem clamp(1.1rem, 3vw, 2.25rem) 7rem; }
+.home-reading { padding-top: 5rem; }
+.page-heading { margin: 0 0 1.6rem; font-size: clamp(1.75rem, 4.6vw, 2.75rem); line-height: 1.18; letter-spacing: -.035em; font-weight: 620; }
+.page-intro { margin: -.45rem 0 2.5rem; color: #b8b8b8; font-size: 1.02rem; line-height: 1.75; }
+.eyebrow, .metadata, .status-copy {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  color: var(--muted); font-size: .8rem; line-height: 1.6;
+}
+.eyebrow { margin: 0 0 .65rem; letter-spacing: .055em; text-transform: uppercase; }
+.metadata { margin: .45rem 0 2rem; }
+.prose { font-size: clamp(1.075rem, 1rem + .2vw, 1.17rem); line-height: 1.84; letter-spacing: -.006em; overflow-wrap: anywhere; }
+.raw-text { white-space: pre-wrap; margin: 0; }
+.prose p { margin: 0 0 1.2em; }
+.recent-records { margin-top: 0; }
+.recent-records h2 { margin: 0 0 1.2rem; color: #9d9d9d; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .78rem; font-weight: 500; letter-spacing: .04em; }
+.home-status { max-width: 36rem; margin: 0; }
+.error-state { padding: 1.5rem; border: 1px solid rgb(205 174 255 / .24); border-radius: 1rem; background: rgb(20 14 29 / .88); }
+.error-state h2 { margin: 0 0 .55rem; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 600; }
+.error-state .status-copy { margin: 0 0 1rem; }
+.error-copy { color: #a8a8a8; }
+.content-list { list-style: none; padding: 0; margin: 0; }
+.content-item { position: relative; margin: .85rem 0; padding: 1.25rem 3rem 1.35rem 1.25rem; border: 1px solid rgb(205 174 255 / .2); border-radius: 1rem; background: rgb(20 14 29 / .88); box-shadow: inset 0 1px rgb(255 255 255 / .07), 0 .8rem 2rem rgb(0 0 0 / .16); transition: transform 180ms ease, border-color 180ms ease, background 180ms ease; }
+.content-item:hover { transform: translateY(-2px); border-color: rgb(205 174 255 / .52); background: rgb(35 22 50 / .92); }
+.content-link { font-size: 1.08rem; line-height: 1.58; font-weight: 560; text-decoration-thickness: 1px; }
+.card-arrow { position: absolute; top: 1.15rem; right: 1.2rem; color: #d8b4fe; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1.1rem; }
+.snippet { margin: .5rem 0 0; white-space: pre-wrap; line-height: 1.72; overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+.notice { margin: 1.5rem 0; padding: .1rem 0 .1rem 1rem; border-left: 1px solid #555; background: transparent; line-height: 1.7; }
+.error { color: #cfcfcf; border-color: #8a8a8a; }
+.inline-links { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin: 1.5rem 0; font-size: .92rem; }
+.section { margin-top: 3.5rem; }
+.section h2 { margin: 0 0 1.05rem; font-size: 1.05rem; font-weight: 620; letter-spacing: -.01em; }
+.disclosure { border-top: 1px solid var(--line); }
+.disclosure:last-child { border-bottom: 1px solid var(--line); }
+.disclosure summary { cursor: pointer; padding: .95rem 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .9rem; }
+.disclosure-body { padding: 0 0 1.25rem; }
+.definition-list { display: grid; grid-template-columns: minmax(7rem, 11rem) 1fr; gap: .65rem 1rem; margin: 0; }
+.definition-list dt { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .82rem; }
+.definition-list dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.search-form { margin-bottom: 1.2rem; }
+.search-line { margin-bottom: 1rem; }
+.search-line input { padding: .85rem .1rem; font-size: 1.08rem; }
+.search-options { display: flex; gap: .7rem; align-items: center; margin-bottom: 2.4rem; }
+.search-options label { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .8rem; }
+.search-options select { min-height: 2.35rem; border: 1px solid #383838; border-radius: .2rem; background: #050505; padding: .3rem .5rem; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .82rem; }
+.load-more { margin-top: 1.25rem; }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 1.25rem; background: rgb(0 0 0 / .84); }
+.dialog { width: min(100%, 36rem); max-height: min(78vh, 42rem); overflow: auto; border: 1px solid #303030; border-radius: .25rem; background: #050505; padding: 1.5rem; box-shadow: none; }
+.dialog h2 { margin: 0 2.5rem 1rem 0; font-size: 1.2rem; font-weight: 620; }
+.dialog-close { float: right; border: 0; background: transparent; color: #b6b6b6; padding: .3rem; cursor: pointer; text-decoration: underline; }
+.dialog-search { margin-top: 1.2rem; }
+.instruction { padding: .9rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.button-row { display: flex; flex-wrap: wrap; gap: .65rem 1rem; align-items: center; }
+.json-value { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .top-slot { height: 9.25rem; }
+  .topbar { width: calc(100% - 2.5rem); height: 9.25rem; align-content: center; gap: .75rem 1rem; }
+  .topbar[data-home="true"] { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 2.6rem 3.1rem; }
+  .topbar[data-home="true"] .top-actions { display: contents; }
+  .topbar[data-home="true"] .home-search { grid-column: 1 / 3; grid-row: 2; width: 100%; }
+  .topbar[data-home="true"] .top-actions > :last-child { grid-column: 2; grid-row: 1; justify-self: end; }
+  .reading-column { width: calc(100% - 2.5rem); padding-top: 1.75rem; }
+  .home-reading { padding-top: 3.5rem; }
+  .definition-list { grid-template-columns: 1fr; gap: .2rem; }
+  .definition-list dd { margin-bottom: .75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+
+/* BEGIN NUANOX INTRODUCTION AND MODALS V1 */
+.topbar.nuanox-topbar { gap: 1.5rem; }
+.topbar.nuanox-topbar .top-actions { gap: .75rem; }
+.topbar.nuanox-topbar .home-search { width: min(34vw, 22rem); }
+.nuanox-header-guides { display: flex; flex: 0 0 auto; align-items: center; gap: .6rem; }
+.nuanox-header-guides > * { flex: 0 0 auto; }
+.specular-button.nuanox-header-button {
+  min-height: 2.75rem; padding-inline: .9rem; white-space: nowrap;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+}
+
+/* A portal keeps these elements outside .site-shell's positioning selectors. */
+dialog.nuanox-modal {
+  position: fixed; inset: 0; margin: auto;
+  width: min(42rem, calc(100vw - 2rem)); max-width: none;
+  max-height: min(84vh, 50rem); max-height: min(84dvh, 50rem);
+  padding: 0; border: 1px solid rgb(205 174 255 / .28); border-radius: 1rem;
+  color: #ededed; background: #15101e; box-shadow: 0 1.5rem 5rem rgb(0 0 0 / .45);
+  overflow: hidden;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
+.nuanox-modal-frame {
+  display: flex; flex-direction: column; min-height: 0;
+  max-height: min(calc(84vh - 2px), calc(50rem - 2px)); max-height: min(calc(84dvh - 2px), calc(50rem - 2px));
+}
+.nuanox-modal-heading {
+  display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid rgb(205 174 255 / .16);
+}
+.nuanox-modal-heading h2 {
+  margin: .35rem 0 0; font-size: 1.2rem; font-weight: 600; line-height: 1.45;
+  letter-spacing: -.025em;
+}
+.nuanox-modal-heading h2:focus { outline: none; }
+.nuanox-modal-close {
+  appearance: none; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem;
+  border: 1px solid rgb(205 174 255 / .25); border-radius: .55rem;
+  padding: .5rem .75rem; color: #ededed; background: rgb(205 174 255 / .07);
+  cursor: pointer; font-size: .875rem; line-height: 1.2;
+}
+.nuanox-modal-close:hover { background: rgb(205 174 255 / .13); }
+.nuanox-modal-body {
+  padding: 1.25rem 1.5rem 1.5rem; min-height: 0; overflow-y: auto;
+  overscroll-behavior: contain; scrollbar-gutter: stable; line-height: 1.75;
+  overflow-wrap: anywhere; word-break: keep-all;
+}
+.nuanox-modal-body > p:first-child { margin-top: 0; }
+.nuanox-modal-body .button-row { gap: .75rem 1rem; }
+.nuanox-modal-body .dialog-search { margin-top: 0; }
+.nuanox-modal-body .status-copy { min-height: 1.6em; margin-bottom: 0; }
+.nuanox-introduction p { margin: 0; }
+.nuanox-introduction-lead { color: #ededed; font-size: 1rem; line-height: 1.8; }
+.nuanox-introduction-section { margin-top: 1.75rem; }
+.nuanox-introduction-section h3 {
+  margin: 0 0 .5rem; color: #ededed; font-size: .96rem; font-weight: 600; line-height: 1.5;
+}
+.nuanox-introduction-section p { color: #c9c3d0; font-size: .94rem; line-height: 1.85; }
+.nuanox-introduction .nuanox-introduction-note {
+  margin-top: 1.75rem; padding-top: 1rem; border-top: 1px solid rgb(205 174 255 / .16);
+  color: #b2aaba; font-size: .83rem; line-height: 1.7;
+}
+
+@media (max-width: 800px) {
+  .top-slot.nuanox-top-slot { height: auto; }
+  .topbar.nuanox-topbar, .topbar.nuanox-topbar[data-home="true"] {
+    height: auto; display: grid; grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none; gap: 1rem; padding-block: 1.4rem;
+  }
+  .topbar.nuanox-topbar .top-actions {
+    display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .8rem;
+  }
+  .topbar.nuanox-topbar[data-home="true"] .top-actions {
+    display: grid; grid-template-columns: minmax(0, 1fr);
+  }
+  .topbar.nuanox-topbar[data-home="true"] .home-search {
+    grid-column: auto; grid-row: auto; width: 100%;
+  }
+  .topbar.nuanox-topbar[data-home="true"] .top-actions > .nuanox-header-guides {
+    grid-column: auto; grid-row: auto; justify-self: start;
+  }
+}
+@media (max-width: 480px) {
+  dialog.nuanox-modal {
+    width: calc(100vw - 1rem);
+    max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem);
+    border-radius: .8rem;
+  }
+  .nuanox-modal-frame {
+    max-height: calc(100vh - 1rem - 2px); max-height: calc(100dvh - 1rem - 2px);
+  }
+  .nuanox-modal-heading { padding: 1rem; gap: .65rem; }
+  .nuanox-modal-heading h2 { font-size: 1.1rem; }
+  .nuanox-modal-body { padding: 1rem; }
+}
+/* END NUANOX INTRODUCTION AND MODALS V1 */

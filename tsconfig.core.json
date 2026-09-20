@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","lib":["DOM","ES2022"],"strict":true,"skipLibCheck":true,"module":"NodeNext","moduleResolution":"NodeNext","rootDir":"src","outDir":".test-build","declaration":false,"types":[]},"include":["src/contracts/**/*.ts","src/domain/**/*.ts"]}

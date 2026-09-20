@@ -1,0 +1,17 @@
+'use client';
+import {useEffect, useState} from 'react';
+import type {ObjectView, Source} from '../contracts/types';
+import {apiGet, errorMessage, formatDate, refHref} from '../lib/api-client';
+import {ObjectFields} from './version-reader';
+
+export default function ObjectReader({kind, id, sourceOnly = false}: {kind: string; id: string; sourceOnly?: boolean}) {
+  const [value, setValue] = useState<ObjectView | Source | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  useEffect(() => { const controller = new AbortController(); setLoading(true); setError(''); const path = sourceOnly ? `/sources/${encodeURIComponent(id)}` : `/objects/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`; apiGet<ObjectView | Source>(path, controller.signal).then(setValue).catch(cause => { const message = errorMessage(cause); if (message) setError(message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [id, kind, sourceOnly]);
+  if (loading) return <p className="status-copy" role="status">객체를 불러오는 중…</p>;
+  if (error || !value) return <div className="notice error" role="alert">{error}</div>;
+  const data = 'value' in value ? value.value : value;
+  const object = data as unknown as Record<string, unknown>;
+  const title = typeof object.title === 'string' && object.title ? object.title : sourceOnly ? '출처' : kind;
+  const text = typeof object.submitted_text === 'string' ? object.submitted_text : typeof object.meaning === 'string' ? object.meaning : typeof object.explanation === 'string' ? object.explanation : null;
+  return <><p className="eyebrow">{sourceOnly ? '제출된 출처' : `객체 · ${kind}`}</p><h1 className="page-heading" tabIndex={-1}>{title}</h1>{typeof object.created_at === 'string' && <p className="metadata">{formatDate(object.created_at)} · {object.created_by ? '기여자 연결됨' : '익명 기여'}</p>}{text && <article className="prose"><p className="raw-text">{text}</p></article>}{sourceOnly && typeof object.url === 'string' && object.url && <p className="notice">이 주소는 기여자가 제출한 참조입니다. Morum이 내용을 자동으로 확인한 것은 아닙니다.<br/><a href={object.url} target="_blank" rel="noreferrer">원래 주소 열기</a></p>}{'target' in object && object.target && typeof object.target === 'object' && <nav className="inline-links"><a href={refHref(object.target as never)}>검토 대상 열기</a></nav>}<section className="section"><details className="disclosure"><summary>저장된 세부 정보</summary><div className="disclosure-body"><ObjectFields value={object}/></div></details></section>{'basis' in value && value.basis.length > 0 && <section className="section"><details className="disclosure"><summary>연결된 근거</summary><div className="disclosure-body"><ul>{value.basis.map(item => <li key={item.id}><a href={`/objects/evidence/${encodeURIComponent(item.id)}`}>{item.basis.explanation}</a></li>)}</ul>{value.basis_truncated && <p className="status-copy">근거가 더 있습니다.</p>}</div></details></section>}</>;
+}

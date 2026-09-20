@@ -1,0 +1,13 @@
+import {createHandler} from '../../../../server/service/http';
+import {createServices,readHealth} from '../../../../server/service/factory';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export const revalidate=0;
+const handle=createHandler(()=>createServices(),()=>readHealth());
+export const GET=handle;
+export const POST=handle;
+export const HEAD=handle;
+export const PUT=handle;
+export const PATCH=handle;
+export const DELETE=handle;
+export const OPTIONS=handle;

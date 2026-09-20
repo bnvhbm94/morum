@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.test-build/
+*.tsbuildinfo
+.env
+.env.*
+.supabase/
+supabase/.temp/
+coverage/
+
+!.env.example
+.nuanox-private/
+examples/private-state/
+.vercel

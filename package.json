@@ -1,0 +1,46 @@
+{
+  "name": "morum",
+  "version": "0.4.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "typecheck:core": "node scripts/compile-core.mjs --check",
+    "test:unit": "node scripts/compile-core.mjs && node --test tests/unit/*.test.mjs",
+    "test:reference": "node --test ../tests/contract-reference.test.mjs",
+    "test:db": "node scripts/compile-server.mjs && node --import ./tests/helpers/register-server-only.mjs --test --test-concurrency=1 tests/db/stage03.integration.test.mjs tests/db/stage04.integration.test.mjs tests/db/open-contribution.integration.test.mjs",
+    "db:apply:test": "node scripts/apply-test-db.mjs",
+    "test:server": "node scripts/compile-server.mjs && node --import ./tests/helpers/register-server-only.mjs --test tests/server/*.test.mjs",
+    "typecheck:server": "node scripts/compile-server.mjs --check",
+    "test:static": "node --test tests/static/*.test.mjs",
+    "test:db:required": "node scripts/require-test-db.mjs && npm run test:db",
+    "test:service": "node scripts/compile-server.mjs && node --import ./tests/helpers/register-server-only.mjs --test tests/service/*.test.mjs",
+    "test:functional": "npm run test:reference && npm run test:unit && npm run test:server && npm run test:static && npm run test:service",
+    "test:db:legacy-v1": "node scripts/compile-core.mjs && node --test tests/db/core.integration.test.mjs",
+    "contracts:generate": "node scripts/compile-server.mjs && node scripts/generate-service-contracts.mjs",
+    "test:http": "node --test --test-concurrency=1 tests/http/open-contribution.integration.test.mjs",
+    "test:http:required": "node scripts/require-local-http.mjs && npm run test:http",
+    "eval:korean": "node scripts/korean-eval.mjs",
+    "test:http:legacy-keyed": "node --test --test-concurrency=1 tests/http/next-postgrest.integration.test.mjs"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "ogl": "^1.0.11",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "pg": "^8.13.0",
+    "typescript": "5.8.3"
+  }
+}
