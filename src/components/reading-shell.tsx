@@ -2,19 +2,12 @@
 
 import {useCallback, useEffect, useRef, useState, type ReactNode, type MouseEvent} from 'react';
 import {usePathname, useRouter} from 'next/navigation';
-import Magnet from './magnet';
-import SpecularButton from './specular-button';
 import Aurora from './Aurora';
 import NuanoxModal from './nuanox-modal';
 import ServiceIntroduction from './service-introduction';
 import {serviceIntroduction} from '../content/service-introduction';
 
 type DialogKind = 'search' | 'agent' | 'about';
-
-const buttonStyle = {
-  size: 'sm', radius: 10, tint: '#a855f7', tintOpacity: .16, blur: 8,
-  baseColor: '#5b2f84', lineColor: '#e9d5ff', intensity: 1.1,
-} as const;
 
 export default function ReadingShell({children}: {children: ReactNode}) {
   const pathname = usePathname(), router = useRouter();
@@ -23,14 +16,30 @@ export default function ReadingShell({children}: {children: ReactNode}) {
   const [origin, setOrigin] = useState('');
   const [copyState, setCopyState] = useState('');
   const triggerRef = useRef<HTMLElement | null>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const atTopRef = useRef(true);
+  const scrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    const update = () => setAtTop(window.scrollY <= 24);
+    const update = () => {
+      if (scrollFrameRef.current !== null) return;
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        const offset = window.scrollY;
+        const nextAtTop = window.scrollY <= 24;
+        if (atTopRef.current !== nextAtTop) {
+          atTopRef.current = nextAtTop;
+          setAtTop(nextAtTop);
+        }
+        shellRef.current?.style.setProperty('--aurora-opacity', String(Math.max(0, .72 - offset / 900)));
+      });
+    };
     update();
     window.addEventListener('scroll', update, {passive: true});
     window.addEventListener('pageshow', update);
     return () => {
+      if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
       window.removeEventListener('scroll', update);
       window.removeEventListener('pageshow', update);
     };
@@ -68,11 +77,11 @@ export default function ReadingShell({children}: {children: ReactNode}) {
     : dialog === 'agent' ? '에이전트 안내' : serviceIntroduction.title;
 
   return (
-    <div className="site-shell">
-      <div className="aurora-background">
+    <div className="site-shell" ref={shellRef}>
+      {pathname !== '/' && <div className="aurora-background">
         <Aurora colorStops={['#7C3AED','#B497CF','#5227FF']} blend={0.5} amplitude={1} speed={0.5} />
-      </div>
-      <div className="top-slot nuanox-top-slot">
+      </div>}
+      {pathname !== '/' && <div className="top-slot nuanox-top-slot">
         <header className="topbar nuanox-topbar" data-home={pathname === '/'} data-hidden={!atTop} aria-hidden={!atTop}>
           {pathname === '/' ? <h1 className="brand">Morum</h1>
             : <a className="brand" href="/" tabIndex={disabledTab}>Morum</a>}
@@ -84,33 +93,24 @@ export default function ReadingShell({children}: {children: ReactNode}) {
                 <span className="enter-hint" aria-hidden="true">Enter</span>
               </form>
             ) : (
-              <Magnet disabled={!atTop}>
-                <SpecularButton {...buttonStyle} className="nuanox-header-button"
-                  disabled={!atTop} tabIndex={disabledTab}
-                  aria-haspopup="dialog" aria-expanded={dialog === 'search'}
-                  aria-controls={dialog === 'search' ? 'nuanox-search-dialog' : undefined}
-                  onClick={(event: MouseEvent<HTMLButtonElement>) => open('search', event.currentTarget)}>검색</SpecularButton>
-              </Magnet>
+              <button className="plain-link" type="button" disabled={!atTop} tabIndex={disabledTab}
+                aria-haspopup="dialog" aria-expanded={dialog === 'search'}
+                aria-controls={dialog === 'search' ? 'nuanox-search-dialog' : undefined}
+                onClick={(event: MouseEvent<HTMLButtonElement>) => open('search', event.currentTarget)}>검색</button>
             )}
             <div className="nuanox-header-guides">
-              <Magnet disabled={!atTop}>
-                <SpecularButton {...buttonStyle} className="nuanox-header-button"
-                  disabled={!atTop} tabIndex={disabledTab}
-                  aria-haspopup="dialog" aria-expanded={dialog === 'agent'}
-                  aria-controls={dialog === 'agent' ? 'nuanox-agent-dialog' : undefined}
-                  onClick={(event: MouseEvent<HTMLButtonElement>) => open('agent', event.currentTarget)}>에이전트 안내</SpecularButton>
-              </Magnet>
-              <Magnet disabled={!atTop}>
-                <SpecularButton {...buttonStyle} className="nuanox-header-button"
-                  disabled={!atTop} tabIndex={disabledTab}
-                  aria-haspopup="dialog" aria-expanded={dialog === 'about'}
-                  aria-controls={dialog === 'about' ? 'nuanox-about-dialog' : undefined}
-                  onClick={(event: MouseEvent<HTMLButtonElement>) => open('about', event.currentTarget)}>서비스 소개</SpecularButton>
-              </Magnet>
+              <button className="plain-link" type="button" disabled={!atTop} tabIndex={disabledTab}
+                aria-haspopup="dialog" aria-expanded={dialog === 'agent'}
+                aria-controls={dialog === 'agent' ? 'nuanox-agent-dialog' : undefined}
+                onClick={(event: MouseEvent<HTMLButtonElement>) => open('agent', event.currentTarget)}>에이전트 안내</button>
+              <button className="plain-link" type="button" disabled={!atTop} tabIndex={disabledTab}
+                aria-haspopup="dialog" aria-expanded={dialog === 'about'}
+                aria-controls={dialog === 'about' ? 'nuanox-about-dialog' : undefined}
+                onClick={(event: MouseEvent<HTMLButtonElement>) => open('about', event.currentTarget)}>서비스 소개</button>
             </div>
           </div>
         </header>
-      </div>
+      </div>}
       {children}
       {dialog && (
         <NuanoxModal key={dialog} id={dialogId} title={dialogTitle}
@@ -131,14 +131,14 @@ export default function ReadingShell({children}: {children: ReactNode}) {
               <p>아래 문장을 자신의 AI 에이전트에게 전달하세요.</p>
               <p className="instruction">{instruction}</p>
               <div className="button-row">
-                <SpecularButton {...buttonStyle} onClick={async () => {
+                <button className="plain-link" type="button" onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(instruction);
                     setCopyState('복사했습니다.');
                   } catch {
                     setCopyState('복사할 수 없습니다. 텍스트를 직접 선택해 주세요.');
                   }
-                }}>안내 복사</SpecularButton>
+                }}>안내 복사</button>
                 <a href="/skill.md" target="_blank" rel="noreferrer">영문 skill.md 열기</a>
                 <a href="/agent/morum-client.mjs" target="_blank" rel="noreferrer">선택적 클라이언트</a>
               </div>

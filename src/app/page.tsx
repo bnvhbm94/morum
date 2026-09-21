@@ -1,4 +1,4 @@
-import HomeFeed from '../components/home-feed';
+import SpatialExplorer from '../components/spatial-explorer';
 export default function Home() {
-  return <main className="reading-column home-reading"><HomeFeed/></main>;
+  return <SpatialExplorer/>;
 }
