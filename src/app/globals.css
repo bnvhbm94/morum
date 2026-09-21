@@ -252,7 +252,7 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 /* END NUANOX INTRODUCTION AND MODALS V1 */
 
 /* Spatial document explorer */
-.spatial-explorer { position: fixed; inset: 0; overflow: hidden; background: #050505; color: #f4f1f7; font-family: Pretendard, "Apple SD Gothic Neo", Inter, ui-sans-serif, system-ui, sans-serif; touch-action: none; }
+.spatial-explorer, .site-shell > .spatial-explorer { position: fixed; inset: 0; overflow: hidden; background: #050505; color: #f4f1f7; font-family: Pretendard, "Apple SD Gothic Neo", Inter, ui-sans-serif, system-ui, sans-serif; touch-action: none; }
 .spatial-dots { position: absolute; inset: -40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23ffffff' fill-opacity='.17'/%3E%3C/svg%3E"); background-size: 28px 28px; pointer-events: none; will-change: background-position; }
 .spatial-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
 .spatial-viewport:active { cursor: grabbing; }
