@@ -12,3 +12,4 @@ coverage/
 .nuanox-private/
 examples/private-state/
 .vercel
+.env*

@@ -16,6 +16,7 @@ import type {VersionView} from '../contracts/types';
 const CELL_X = 430;
 const CELL_Y = 300;
 const DRAG_THRESHOLD = 7;
+const DOUBLE_TAP = 340;
 const SEARCH_DELAY = 1000;
 
 type Point = {x: number; y: number};
@@ -45,6 +46,7 @@ export default function SpatialExplorer() {
   const cameraRef = useRef<Point>({x: 0, y: 0}), frameRef = useRef<number | null>(null), inertiaRef = useRef<number | null>(null);
   const pointerRef = useRef<{id: number; startX: number; startY: number; lastX: number; lastY: number; lastAt: number; vx: number; vy: number; moved: boolean} | null>(null);
   const generationRef = useRef(0), selectedRef = useRef(0), nodesRef = useRef<PositionedNode[]>([]), suppressClickRef = useRef(false);
+  const lastTapRef = useRef<{index: number; at: number} | null>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null), pageRequestRef = useRef<AbortController | null>(null), readerRequestRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState<SpatialPage | null>(null), [selected, setSelected] = useState(0);
   const [loading, setLoading] = useState(true), [failure, setFailure] = useState(''), [query, setQuery] = useState(''), [activeQuery, setActiveQuery] = useState('');
@@ -86,7 +88,7 @@ export default function SpatialExplorer() {
   }, [schedulePaint, stopMotion]);
 
   const loadPage = useCallback(async (nextQuery: string) => {
-    const generation = ++generationRef.current; setLoading(true); setFailure(''); setActiveQuery(nextQuery.trim()); stopMotion();
+    const generation = ++generationRef.current; setLoading(true); setFailure(''); setActiveQuery(nextQuery.trim()); stopMotion(); lastTapRef.current = null;
     pageRequestRef.current?.abort(); const controller = new AbortController(); pageRequestRef.current = controller;
     try {
       const result = nextQuery.trim() ? await loadSpatialSearch(nextQuery, {scope: 'current', limit: 20, include_context: true}, controller.signal) : await loadSpatialHome(controller.signal);
@@ -105,12 +107,12 @@ export default function SpatialExplorer() {
     catch (error) { if (!controller.signal.aborted) { setReaderError(errorMessage(error) || '문서를 열지 못했습니다.'); setReaderLoading(false); } }
   }, []);
 
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { if (reader || event.button !== 0) return; stopMotion(); event.currentTarget.setPointerCapture(event.pointerId); pointerRef.current = {id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(), vx: 0, vy: 0, moved: false}; markActive(); };
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; const now = performance.now(), dx = event.clientX - pointer.lastX, dy = event.clientY - pointer.lastY, dt = Math.max(now - pointer.lastAt, 1); pointer.vx = dx / dt * 16; pointer.vy = dy / dt * 16; pointer.lastX = event.clientX; pointer.lastY = event.clientY; pointer.lastAt = now; pointer.moved ||= Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) >= DRAG_THRESHOLD; cameraRef.current.x += dx; cameraRef.current.y += dy; schedulePaint(); };
-  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); pointerRef.current = null; suppressClickRef.current = pointer.moved; if (pointer.moved) setTimeout(() => { suppressClickRef.current = false; }, 0); if (cancelled || !pointer.moved || reducedMotion.current) return; let vx = pointer.vx, vy = pointer.vy; const tick = () => { vx *= .92; vy *= .92; cameraRef.current.x += vx; cameraRef.current.y += vy; schedulePaint(); if (Math.hypot(vx, vy) > .35) inertiaRef.current = requestAnimationFrame(tick); else inertiaRef.current = null; }; inertiaRef.current = requestAnimationFrame(tick); };
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { if (reader || event.button !== 0) return; stopMotion(); pointerRef.current = {id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(), vx: 0, vy: 0, moved: false}; markActive(); };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; const now = performance.now(), dx = event.clientX - pointer.lastX, dy = event.clientY - pointer.lastY, dt = Math.max(now - pointer.lastAt, 1); pointer.vx = dx / dt * 16; pointer.vy = dy / dt * 16; pointer.lastX = event.clientX; pointer.lastY = event.clientY; pointer.lastAt = now; const wasMoved = pointer.moved; pointer.moved ||= Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) >= DRAG_THRESHOLD; if (pointer.moved && !wasMoved) { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer already released */ } } cameraRef.current.x += dx; cameraRef.current.y += dy; schedulePaint(); };
+  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); pointerRef.current = null; suppressClickRef.current = pointer.moved; if (pointer.moved) { lastTapRef.current = null; setTimeout(() => { suppressClickRef.current = false; }, 0); } if (cancelled || !pointer.moved || reducedMotion.current) return; let vx = pointer.vx, vy = pointer.vy; const tick = () => { vx *= .92; vy *= .92; cameraRef.current.x += vx; cameraRef.current.y += vy; schedulePaint(); if (Math.hypot(vx, vy) > .35) inertiaRef.current = requestAnimationFrame(tick); else inertiaRef.current = null; }; inertiaRef.current = requestAnimationFrame(tick); };
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { const target = event.target instanceof HTMLElement ? event.target : null; if (reader || composing || event.isComposing || target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return; if (event.key === 'Enter') { const node = nodesRef.current[selectedRef.current]; if (node) { event.preventDefault(); void openNode(node); } return; } if (!event.key.startsWith('Arrow')) return; const current = nodesRef.current[selectedRef.current], next = current && directionalNode(nodesRef.current, current, event.key); if (next) { event.preventDefault(); const index = nodesRef.current.indexOf(next); setSelected(index); selectedRef.current = index; center(index); markActive(); } };
+    const onKey = (event: KeyboardEvent) => { const target = event.target instanceof HTMLElement ? event.target : null; if (reader || composing || event.isComposing || target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return; if (event.key === 'Enter') { const node = nodesRef.current[selectedRef.current]; if (node) { event.preventDefault(); void openNode(node); } return; } if (!event.key.startsWith('Arrow')) return; const current = nodesRef.current[selectedRef.current], next = current && directionalNode(nodesRef.current, current, event.key); if (next) { event.preventDefault(); const index = nodesRef.current.indexOf(next); setSelected(index); selectedRef.current = index; center(index); markActive(); lastTapRef.current = null; } };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [center, composing, markActive, openNode, reader]);
 
@@ -122,7 +124,7 @@ export default function SpatialExplorer() {
     <h1 className="sr-only">Morum 문서 공간</h1>
     <div className="spatial-dots" ref={dotsRef}/>
     <div className="spatial-viewport" ref={viewportRef} tabIndex={-1} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={event => finishPointer(event)} onPointerCancel={event => finishPointer(event, true)}>
-      <div className="spatial-world" ref={worldRef}>{nodes.map((node, index) => <button key={node.key} type="button" className="spatial-node" data-selected={index === selected} style={{'--grid-x': node.x, '--grid-y': node.y} as CSSProperties} onClick={() => { if (suppressClickRef.current) return; if (index !== selectedRef.current) { setSelected(index); selectedRef.current = index; center(index); } else void openNode(node); }}><span className="spatial-node-title">{node.title}</span><span className="spatial-node-copy">{node.snippet || '내용 미리보기가 없습니다.'}</span><span className="spatial-node-meta">{node.versionState === 'current' ? '현재 버전' : node.versionState === 'historical' ? '과거 버전' : '문서'}</span></button>)}</div>
+      <div className="spatial-world" ref={worldRef}>{nodes.map((node, index) => <button key={node.key} type="button" className="spatial-node" data-selected={index === selected} style={{'--grid-x': node.x, '--grid-y': node.y} as CSSProperties} onMouseDown={event => { if (event.detail >= 2) event.preventDefault(); }} onClick={event => { if (suppressClickRef.current) return; if (index !== selectedRef.current) { setSelected(index); selectedRef.current = index; } center(index); const now = performance.now(), last = lastTapRef.current, doubleActivation = event.detail >= 2 || (last !== null && last.index === index && now - last.at <= DOUBLE_TAP); if (doubleActivation) { lastTapRef.current = null; void openNode(node); } else lastTapRef.current = {index, at: now}; }}><span className="spatial-node-title">{node.title}</span><span className="spatial-node-copy">{node.snippet || '내용 미리보기가 없습니다.'}</span><span className="spatial-node-meta">{node.versionState === 'current' ? '현재 버전' : node.versionState === 'historical' ? '과거 버전' : '문서'}</span></button>)}</div>
     </div>
     <div className="spatial-status" aria-live="polite">{loading ? '문서 공간을 불러오는 중…' : failure ? <><span>{failure}</span><button type="button" onClick={() => void loadPage(activeQuery)}>다시 시도</button></> : !nodes.length ? (activeQuery ? '검색 결과가 없습니다.' : '아직 공개된 기록이 없습니다.') : <>{activeQuery ? `“${activeQuery}” 검색 결과 · ${nodes.length}개` : `최근 문서 · ${nodes.length}개`}{page?.hasMore ? ' · 더 있음' : ''}</>}</div>
     <form className="spatial-search" data-hidden={!searchVisible && !inputFocused} onSubmit={submit}><label className="sr-only" htmlFor="spatial-query">지식 검색</label><input id="spatial-query" value={query} onChange={event => setQuery(event.target.value)} onFocus={() => setInputFocused(true)} onBlur={() => setInputFocused(false)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setComposing(false); setQuery(event.currentTarget.value); }} placeholder="문서와 맥락 검색" autoComplete="off"/><button type="submit">검색</button></form>
@@ -133,9 +135,45 @@ export default function SpatialExplorer() {
 
 function SpatialReader({state, loading, error, onClose, onOpen}: {state: ReaderState | null; loading: boolean; error: string; onClose: () => void; onOpen: (node: SpatialNode, direction: 'left' | 'right') => void}) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const prevRef = useRef<ReaderState | null>(null), reducedMotionRef = useRef(false);
+  const [outgoing, setOutgoing] = useState<{state: ReaderState; direction: 'left' | 'right'} | null>(null);
+  useEffect(() => { reducedMotionRef.current = matchMedia('(prefers-reduced-motion: reduce)').matches; }, []);
   useEffect(() => { closeRef.current?.focus(); const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [onClose]);
-  const left = state?.neighbors.filter(item => item.side === 'left').slice(0, 4) || [], right = state?.neighbors.filter(item => item.side === 'right').slice(0, 4) || [], context = state?.neighbors.filter(item => item.side === 'context').slice(0, 4) || [];
-  return <section className="spatial-reader" data-direction={state?.direction || 'center'} aria-modal="true" role="dialog" aria-labelledby={state ? 'spatial-reader-title' : undefined} aria-label={state ? undefined : loading ? '문서를 불러오는 중' : error ? '문서를 열지 못했습니다' : '문서 읽기'}><button ref={closeRef} className="spatial-close" type="button" onClick={onClose} aria-label="읽기 닫기">×</button>{loading ? <p role="status" className="reader-message">문서를 불러오는 중…</p> : error ? <div className="reader-message" role="alert"><p>{error}</p><button type="button" onClick={onClose}>문서 공간으로 돌아가기</button></div> : state && <div className="reader-stage"><RelationColumn label="근거와 상위 맥락" items={left} direction="left" onOpen={onOpen}/><article className="reader-document"><p className="reader-eyebrow">버전 {state.view.version.version_no}{state.view.is_current ? ' · 현재' : ' · 과거'}</p><h2 id="spatial-reader-title">{state.view.version.title || '제목 없는 기록'}</h2><p className="reader-body">{state.view.version.body_text}</p><nav className="reader-links" aria-label="문서 상세"><a href={`/versions/${encodeURIComponent(state.view.version.id)}`}>고정 링크와 전체 맥락</a><a href={`/versions/${encodeURIComponent(state.view.version.id)}/raw`} target="_blank" rel="noreferrer">원문</a><a href={`/records/${encodeURIComponent(state.view.version.record_id)}/history`}>이력</a></nav>{context.length > 0 && <div className="reader-context"><h3>기타 관계</h3>{context.map(item => <a key={item.relation.id} href={item.node.href}>{relationLabel(item)} · {item.node.title}</a>)}</div>}{state.hasMore && <p className="reader-more">표시되지 않은 관계는 전체 맥락에서 볼 수 있습니다.</p>}</article><RelationColumn label="파생과 정정" items={right} direction="right" onOpen={onOpen}/></div>}</section>;
+  useEffect(() => {
+    const prev = prevRef.current; prevRef.current = state;
+    if (!state || !prev || prev.view.version.id === state.view.version.id || state.direction === 'center' || reducedMotionRef.current) return;
+    setOutgoing({state: prev, direction: state.direction});
+    const timer = setTimeout(() => setOutgoing(null), 420);
+    return () => clearTimeout(timer);
+  }, [state]);
+  return <section className="spatial-reader" data-direction={state?.direction || 'center'} aria-modal="true" role="dialog" aria-labelledby={state ? 'spatial-reader-title' : undefined} aria-label={state ? undefined : loading ? '문서를 불러오는 중' : error ? '문서를 열지 못했습니다' : '문서 읽기'}>
+    <button ref={closeRef} className="spatial-close" type="button" onClick={onClose} aria-label="읽기 닫기">×</button>
+    {loading ? <p role="status" className="reader-message">문서를 불러오는 중…</p>
+      : error ? <div className="reader-message" role="alert"><p>{error}</p><button type="button" onClick={onClose}>문서 공간으로 돌아가기</button></div>
+      : state && (outgoing
+        ? <div className="reader-slide" data-direction={outgoing.direction}>
+            {outgoing.direction === 'left'
+              ? <><ReaderStage state={state} onOpen={onOpen}/><ReaderStage state={outgoing.state} onOpen={onOpen} inert titled={false}/></>
+              : <><ReaderStage state={outgoing.state} onOpen={onOpen} inert titled={false}/><ReaderStage state={state} onOpen={onOpen}/></>}
+          </div>
+        : <ReaderStage state={state} onOpen={onOpen}/>)}
+  </section>;
+}
+
+function ReaderStage({state, onOpen, inert, titled = true}: {state: ReaderState; onOpen: (node: SpatialNode, direction: 'left' | 'right') => void; inert?: boolean; titled?: boolean}) {
+  const left = state.neighbors.filter(item => item.side === 'left').slice(0, 4), right = state.neighbors.filter(item => item.side === 'right').slice(0, 4), context = state.neighbors.filter(item => item.side === 'context').slice(0, 4);
+  return <div className="reader-stage" aria-hidden={inert || undefined} inert={inert}>
+    <RelationColumn label="근거와 상위 맥락" items={left} direction="left" onOpen={onOpen}/>
+    <article className="reader-document">
+      <p className="reader-eyebrow">버전 {state.view.version.version_no}{state.view.is_current ? ' · 현재' : ' · 과거'}</p>
+      <h2 id={titled ? 'spatial-reader-title' : undefined}>{state.view.version.title || '제목 없는 기록'}</h2>
+      <p className="reader-body">{state.view.version.body_text}</p>
+      <nav className="reader-links" aria-label="문서 상세"><a href={`/versions/${encodeURIComponent(state.view.version.id)}`}>고정 링크와 전체 맥락</a><a href={`/versions/${encodeURIComponent(state.view.version.id)}/raw`} target="_blank" rel="noreferrer">원문</a><a href={`/records/${encodeURIComponent(state.view.version.record_id)}/history`}>이력</a></nav>
+      {context.length > 0 && <div className="reader-context"><h3>기타 관계</h3>{context.map(item => <a key={item.relation.id} href={item.node.href}>{relationLabel(item)} · {item.node.title}</a>)}</div>}
+      {state.hasMore && <p className="reader-more">표시되지 않은 관계는 전체 맥락에서 볼 수 있습니다.</p>}
+    </article>
+    <RelationColumn label="파생과 정정" items={right} direction="right" onOpen={onOpen}/>
+  </div>;
 }
 
 function relationLabel(item: SpatialNeighbor) { const labels: Record<string, string> = {supports: '지지', corrects: '정정', depends_on: '의존', derived_from: '파생', contradicts: '반론', defines: '정의', related_to: '관련', same_meaning_as: '같은 의미', translation_of: '번역'}; return labels[item.relation.predicate] || item.relation.predicate; }

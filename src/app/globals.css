@@ -269,15 +269,22 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 .spatial-node[data-selected="true"] { color: #fff; }
 .spatial-status { position: fixed; left: 1.35rem; top: 1.1rem; z-index: 3; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; }
 .spatial-status button { margin-left: .8rem; border: 0; padding: 0; color: #ddd; background: transparent; text-decoration: underline; cursor: pointer; }
-.spatial-search { position: fixed; z-index: 4; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); display: flex; width: min(35rem, calc(100% - 2rem)); min-height: 3.25rem; translate: -50% 0; overflow: hidden; border: 1px solid rgb(255 255 255 / .16); border-radius: 999px; background: rgb(25 25 25 / .58); box-shadow: inset 0 1px rgb(255 255 255 / .12), 0 .8rem 3rem rgb(0 0 0 / .35); backdrop-filter: blur(16px); transition: translate 260ms ease, opacity 260ms ease; }
+.spatial-search { position: fixed; z-index: 4; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); display: flex; width: min(35rem, calc(100% - 2rem)); min-height: 3.25rem; translate: -50% 0; overflow: hidden; border: 0; border-radius: 999px; background: rgb(255 255 255 / .045); box-shadow: inset 0 18px 26px -20px rgb(255 255 255 / .4), inset 0 -14px 20px -18px rgb(255 255 255 / .07), inset 0 0 0 1px rgb(255 255 255 / .1), 0 .8rem 3rem rgb(0 0 0 / .45); backdrop-filter: blur(20px) saturate(170%) brightness(1.3); -webkit-backdrop-filter: blur(20px) saturate(170%) brightness(1.3); transition: translate 260ms ease, opacity 260ms ease; }
+.spatial-search::before { content: ""; position: absolute; left: 10%; right: 10%; top: -12%; height: 58%; z-index: -1; border-radius: 999px / 100%; background: rgb(255 255 255 / .14); filter: blur(16px); pointer-events: none; }
 .spatial-search[data-hidden="true"] { translate: -50% calc(100% + 2.5rem); opacity: 0; pointer-events: none; }
 .spatial-search input { flex: 1; min-width: 0; border: 0; padding: 0 1.3rem; color: #fff; background: transparent; outline: 0; font: inherit; font-size: .9rem; }
-.spatial-search input::placeholder { color: #8b8b8b; }
-.spatial-search button { border: 0; padding: 0 1.3rem; color: #bcbcbc; background: transparent; font: inherit; font-size: .75rem; cursor: pointer; }
-.spatial-reader { position: fixed; z-index: 10; inset: 0; overflow: auto; overscroll-behavior: contain; color: #eae6ec; background: rgb(5 5 5 / .98); font-family: "Source Serif 4", "Noto Serif KR", "Iowan Old Style", Georgia, serif; touch-action: pan-y; animation: reader-in 300ms ease both; }
+.spatial-search input::placeholder { color: #9a9a9a; }
+.spatial-search button { border: 0; padding: 0 1.3rem; color: #c4c4c4; background: transparent; font: inherit; font-size: .75rem; cursor: pointer; }
+.spatial-reader { position: fixed; z-index: 10; inset: 0; overflow: auto; overscroll-behavior: contain; color: #eae6ec; background: #050505; font-family: "Source Serif 4", "Noto Serif KR", "Iowan Old Style", Georgia, serif; touch-action: pan-y; animation: reader-in 300ms ease both; }
 .spatial-reader[data-direction="left"] { animation-name: reader-in-left; }
-.spatial-close { position: fixed; z-index: 12; top: max(1rem, env(safe-area-inset-top)); right: 1.1rem; width: 34px; height: 34px; border: 1px solid rgb(255 255 255 / .2); border-radius: 50%; padding: 0 0 .14rem; color: #eee; background: rgb(40 40 40 / .58); box-shadow: inset 0 1px rgb(255 255 255 / .15); backdrop-filter: blur(12px); font: 300 1.45rem/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.spatial-close { position: fixed; z-index: 12; top: max(1rem, env(safe-area-inset-top)); right: 1.1rem; width: 34px; height: 34px; border: 0; border-radius: 50%; padding: 0 0 .14rem; color: #eee; background: rgb(255 255 255 / .06); box-shadow: inset 0 10px 14px -10px rgb(255 255 255 / .4), inset 0 -8px 10px -10px rgb(255 255 255 / .08), inset 0 0 0 1px rgb(255 255 255 / .12), 0 .4rem 1.1rem rgb(0 0 0 / .45); backdrop-filter: blur(14px) saturate(160%) brightness(1.25); -webkit-backdrop-filter: blur(14px) saturate(160%) brightness(1.25); font: 300 1.45rem/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
 .spatial-close::after { content: ""; position: absolute; inset: -7px; }
+.reader-slide { display: flex; overflow-x: hidden; width: 100%; }
+.reader-slide > .reader-stage { flex: 0 0 100%; min-width: 0; }
+.reader-slide[data-direction="right"] { animation: reader-slide-right 420ms cubic-bezier(.22, .61, .36, 1) both; }
+.reader-slide[data-direction="left"] { animation: reader-slide-left 420ms cubic-bezier(.22, .61, .36, 1) both; }
+@keyframes reader-slide-right { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes reader-slide-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 .reader-stage { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(24rem, 45rem) minmax(10rem, 1fr); gap: clamp(2rem, 5vw, 6rem); width: min(92rem, calc(100% - 3rem)); margin: 0 auto; padding: clamp(5rem, 10vh, 8rem) 0 7rem; align-items: start; }
 .reader-document { min-width: 0; }
 .reader-eyebrow { margin: 0 0 1.2rem; color: #888; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .7rem; letter-spacing: .08em; }
@@ -304,7 +311,7 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
   .spatial-node { width: min(310px, 78vw); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spatial-search, .spatial-reader { transition: none; animation: none; }
+  .spatial-search, .spatial-reader, .reader-slide { transition: none; animation: none; }
 }
 
 /* Text-first archive direction */
