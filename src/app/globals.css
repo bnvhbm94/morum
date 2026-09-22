@@ -257,7 +257,7 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 .spatial-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
 .spatial-viewport:active { cursor: grabbing; }
 .spatial-world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; will-change: transform; }
-.spatial-node { --node-light: .42; position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: min(340px, 72vw); min-height: 180px; translate: -50% -50%; border: 0; padding: 1rem 0; color: color-mix(in srgb, #fff calc(var(--node-light) * 100%), #4b4b4b); background: transparent; text-align: left; font: inherit; cursor: pointer; transition: color 120ms linear; }
+.spatial-node { --node-light: .42; -webkit-user-select: none; user-select: none; position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: min(340px, 72vw); min-height: 180px; translate: -50% -50%; border: 0; padding: 1rem 0; color: color-mix(in srgb, #fff calc(var(--node-light) * 100%), #4b4b4b); background: transparent; text-align: left; font: inherit; cursor: pointer; transition: color 120ms linear; }
 .spatial-node::before { content: ""; position: absolute; inset: -.6rem -1rem; border-radius: 1.2rem; background: rgb(255 255 255 / 0); transition: background 180ms ease; }
 .spatial-node:hover::before, .spatial-node:focus-visible::before { background: rgb(255 255 255 / .025); }
 .spatial-node:focus-visible { outline: 0; }
