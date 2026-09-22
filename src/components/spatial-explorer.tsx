@@ -3,15 +3,19 @@
 import {useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent} from 'react';
 import {
   loadSpatialHome,
+  loadSpatialContextMany,
   loadSpatialNeighbors,
   loadSpatialSearch,
   loadSpatialVersion,
+  layoutEdges,
+  layoutNodes,
+  type LayoutEdge,
   type SpatialNeighbor,
   type SpatialNode,
   type SpatialPage,
 } from '../lib/spatial-data';
 import {errorMessage} from '../lib/api-client';
-import type {VersionView} from '../contracts/types';
+import type {Relation, VersionView} from '../contracts/types';
 
 const CELL_X = 430;
 const CELL_Y = 300;
@@ -45,7 +49,7 @@ export function directionalNode(nodes: PositionedNode[], current: PositionedNode
 export default function SpatialExplorer() {
   const viewportRef = useRef<HTMLDivElement>(null), worldRef = useRef<HTMLDivElement>(null), dotsRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<Point>({x: 0, y: 0}), frameRef = useRef<number | null>(null), inertiaRef = useRef<number | null>(null);
-  const pointerRef = useRef<{id: number; startX: number; startY: number; lastX: number; lastY: number; lastAt: number; vx: number; vy: number; moved: boolean} | null>(null);
+  const pointerRef = useRef<{id: number; startX: number; startY: number; lastX: number; lastY: number; lastAt: number; vx: number; vy: number; moved: boolean; samples: {dx: number; dy: number; dt: number; at: number}[]} | null>(null);
   const generationRef = useRef(0), selectedRef = useRef(0), nodesRef = useRef<PositionedNode[]>([]), suppressClickRef = useRef(false);
   const lastTapRef = useRef<{index: number; at: number} | null>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null), pageRequestRef = useRef<AbortController | null>(null), readerRequestRef = useRef<AbortController | null>(null);
@@ -53,8 +57,11 @@ export default function SpatialExplorer() {
   const [loading, setLoading] = useState(true), [failure, setFailure] = useState(''), [query, setQuery] = useState(''), [activeQuery, setActiveQuery] = useState('');
   const [searchVisible, setSearchVisible] = useState(true), [inputFocused, setInputFocused] = useState(false), [composing, setComposing] = useState(false);
   const [reader, setReader] = useState<ReaderState | null>(null), [readerLoading, setReaderLoading] = useState(false), [readerError, setReaderError] = useState('');
+  const [relations, setRelations] = useState<Relation[]>([]), [relationsFailed, setRelationsFailed] = useState(false);
+  const [pageGeneration, setPageGeneration] = useState(0);
   const reducedMotion = useRef(false);
-  const nodes = (page?.nodes || []).map((node, index) => ({...node, ...spatialCoordinate(index)}));
+  const edges: LayoutEdge[] = layoutEdges(relations, new Set((page?.nodes || []).map(node => node.key)));
+  const nodes = layoutNodes(page?.nodes || [], edges, spatialCoordinate);
   nodesRef.current = nodes; selectedRef.current = Math.min(selected, Math.max(nodes.length - 1, 0));
 
   const paint = useCallback(() => {
@@ -92,11 +99,27 @@ export default function SpatialExplorer() {
     const generation = ++generationRef.current; setLoading(true); setFailure(''); setActiveQuery(nextQuery.trim()); stopMotion(); lastTapRef.current = null;
     pageRequestRef.current?.abort(); const controller = new AbortController(); pageRequestRef.current = controller;
     try {
-      const result = nextQuery.trim() ? await loadSpatialSearch(nextQuery, {scope: 'current', limit: 20, include_context: true}, controller.signal) : await loadSpatialHome(controller.signal);
-      if (generation !== generationRef.current) return; setPage(result); setSelected(0); selectedRef.current = 0; cameraRef.current = {x: 0, y: 0}; requestAnimationFrame(paint);
+      const trimmed = nextQuery.trim();
+      let result: SpatialPage, searchRelations: Relation[] = [];
+      if (trimmed) {
+        const searchResult = await loadSpatialSearch(nextQuery, {scope: 'current', limit: 20, include_context: true}, controller.signal);
+        result = searchResult; searchRelations = searchResult.response.context?.relations ?? [];
+      } else {
+        result = await loadSpatialHome(controller.signal);
+      }
+      if (generation !== generationRef.current) return;
+      setPage(result); setRelations(searchRelations); setRelationsFailed(false);
+      setPageGeneration(value => value + 1);
+      selectedRef.current = 0; setSelected(0);
+      if (!nextQuery.trim() && result.nodes.length) {
+        loadSpatialContextMany(result.nodes.slice(0, 5).map(node => node.target), 1, controller.signal)
+          .then(context => { if (generation === generationRef.current) setRelations(context.relations ?? []); })
+          .catch(() => { if (generation === generationRef.current) setRelationsFailed(true); });
+      }
     } catch (error) { if (generation === generationRef.current) setFailure(errorMessage(error) || '문서 공간을 불러오지 못했습니다.'); }
     finally { if (generation === generationRef.current) setLoading(false); }
-  }, [paint, stopMotion]);
+  }, [stopMotion]);
+  useEffect(() => { if (pageGeneration > 0) center(0); }, [center, pageGeneration]);
 
   useEffect(() => { reducedMotion.current = matchMedia('(prefers-reduced-motion: reduce)').matches; void loadPage(''); return () => { generationRef.current += 1; stopMotion(); if (frameRef.current !== null) cancelAnimationFrame(frameRef.current); if (idleRef.current) clearTimeout(idleRef.current); pageRequestRef.current?.abort(); readerRequestRef.current?.abort(); }; }, [loadPage, stopMotion]);
   useEffect(() => { const resize = () => schedulePaint(); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, [schedulePaint]);
@@ -108,9 +131,28 @@ export default function SpatialExplorer() {
     catch (error) { if (!controller.signal.aborted) { setReaderError(errorMessage(error) || '문서를 열지 못했습니다.'); setReaderLoading(false); } }
   }, []);
 
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { if (reader || event.button !== 0) return; stopMotion(); pointerRef.current = {id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(), vx: 0, vy: 0, moved: false}; markActive(); };
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; const now = performance.now(), dx = event.clientX - pointer.lastX, dy = event.clientY - pointer.lastY, dt = Math.max(now - pointer.lastAt, 1); pointer.vx = dx / dt * 16; pointer.vy = dy / dt * 16; pointer.lastX = event.clientX; pointer.lastY = event.clientY; pointer.lastAt = now; const wasMoved = pointer.moved; pointer.moved ||= Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) >= DRAG_THRESHOLD; if (pointer.moved && !wasMoved) { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer already released */ } } cameraRef.current.x += dx; cameraRef.current.y += dy; schedulePaint(); };
-  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); pointerRef.current = null; suppressClickRef.current = pointer.moved; if (pointer.moved) { lastTapRef.current = null; setTimeout(() => { suppressClickRef.current = false; }, 0); } if (cancelled || !pointer.moved || reducedMotion.current) return; let vx = pointer.vx, vy = pointer.vy; const speed = Math.hypot(vx, vy); if (speed > MAX_FLICK) { vx = vx / speed * MAX_FLICK; vy = vy / speed * MAX_FLICK; } const tick = () => { vx *= .92; vy *= .92; cameraRef.current.x += vx; cameraRef.current.y += vy; schedulePaint(); if (Math.hypot(vx, vy) > .35) inertiaRef.current = requestAnimationFrame(tick); else inertiaRef.current = null; }; inertiaRef.current = requestAnimationFrame(tick); };
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { if (reader || event.button !== 0) return; stopMotion(); pointerRef.current = {id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(), vx: 0, vy: 0, moved: false, samples: []}; markActive(); };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return; const now = performance.now(), dx = event.clientX - pointer.lastX, dy = event.clientY - pointer.lastY, dt = Math.max(now - pointer.lastAt, 1); pointer.samples.push({dx, dy, dt, at: now}); if (pointer.samples.length > 3) pointer.samples.shift(); pointer.vx = dx / dt * 16; pointer.vy = dy / dt * 16; pointer.lastX = event.clientX; pointer.lastY = event.clientY; pointer.lastAt = now; const wasMoved = pointer.moved; pointer.moved ||= Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) >= DRAG_THRESHOLD; if (pointer.moved && !wasMoved) { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer already released */ } } cameraRef.current.x += dx; cameraRef.current.y += dy; schedulePaint(); };
+  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
+    const pointer = pointerRef.current; if (!pointer || pointer.id !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    pointerRef.current = null; suppressClickRef.current = pointer.moved;
+    if (pointer.moved) { lastTapRef.current = null; setTimeout(() => { suppressClickRef.current = false; }, 0); }
+    if (cancelled || !pointer.moved || reducedMotion.current) return;
+    const now = performance.now();
+    const recent = pointer.samples.filter(sample => now - sample.at <= 80);
+    let vx = 0, vy = 0;
+    if (recent.length) {
+      const weights = [2, 1, 1];
+      const recentTail = recent.slice(-3);
+      let sumDx = 0, sumDy = 0, sumDt = 0;
+      recentTail.reverse().forEach((sample, index) => { const weight = weights[index] ?? 1; sumDx += sample.dx * weight; sumDy += sample.dy * weight; sumDt += sample.dt * weight; });
+      if (sumDt > 0) { vx = sumDx / sumDt * 16; vy = sumDy / sumDt * 16; }
+    }
+    const speed = Math.hypot(vx, vy); if (speed > MAX_FLICK) { vx = vx / speed * MAX_FLICK; vy = vy / speed * MAX_FLICK; }
+    const tick = () => { vx *= .92; vy *= .92; cameraRef.current.x += vx; cameraRef.current.y += vy; schedulePaint(); if (Math.hypot(vx, vy) > .35) inertiaRef.current = requestAnimationFrame(tick); else inertiaRef.current = null; };
+    inertiaRef.current = requestAnimationFrame(tick);
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { const target = event.target instanceof HTMLElement ? event.target : null; if (reader || composing || event.isComposing || target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return; if (event.key === 'Enter') { const node = nodesRef.current[selectedRef.current]; if (node) { event.preventDefault(); void openNode(node); } return; } if (!event.key.startsWith('Arrow')) return; const current = nodesRef.current[selectedRef.current], next = current && directionalNode(nodesRef.current, current, event.key); if (next) { event.preventDefault(); const index = nodesRef.current.indexOf(next); setSelected(index); selectedRef.current = index; center(index); markActive(); lastTapRef.current = null; } };
@@ -121,14 +163,20 @@ export default function SpatialExplorer() {
   useEffect(() => { if (composing || query.trim() === activeQuery) return; const timer = setTimeout(() => void loadPage(query), SEARCH_DELAY); return () => clearTimeout(timer); }, [activeQuery, composing, loadPage, query]);
 
   const selectedNode = nodes[selected];
+  const usedEdgeCount = edges.filter(edge => nodes.some(node => node.key === edge.left) && nodes.some(node => node.key === edge.right)).length;
+  const placementSentence = activeQuery ? '관련도순 배치' : '최근순 배치';
+  const relationSentence = relationsFailed ? ' · 관계 정보를 불러오지 못함' : usedEdgeCount ? ` · 관계 ${usedEdgeCount}개 반영` : ' · 관계 없음';
+  const dockHidden = !searchVisible && !inputFocused && !loading && !failure;
   return <main className="spatial-explorer" aria-busy={loading}>
     <h1 className="sr-only">Morum 문서 공간</h1>
     <div className="spatial-dots" ref={dotsRef}/>
     <div className="spatial-viewport" ref={viewportRef} tabIndex={-1} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={event => finishPointer(event)} onPointerCancel={event => finishPointer(event, true)}>
       <div className="spatial-world" ref={worldRef}>{nodes.map((node, index) => <button key={node.key} type="button" className="spatial-node" data-selected={index === selected} style={{'--grid-x': node.x, '--grid-y': node.y} as CSSProperties} onMouseDown={event => { if (event.detail >= 2) event.preventDefault(); }} onClick={event => { if (suppressClickRef.current) return; if (index !== selectedRef.current) { setSelected(index); selectedRef.current = index; } center(index); const now = performance.now(), last = lastTapRef.current, doubleActivation = event.detail >= 2 || (last !== null && last.index === index && now - last.at <= DOUBLE_TAP); if (doubleActivation) { lastTapRef.current = null; void openNode(node); } else lastTapRef.current = {index, at: now}; }}><span className="spatial-node-title">{node.title}</span><span className="spatial-node-copy">{node.snippet || '내용 미리보기가 없습니다.'}</span><span className="spatial-node-meta">{node.versionState === 'current' ? '현재 버전' : node.versionState === 'historical' ? '과거 버전' : '문서'}</span></button>)}</div>
     </div>
-    <div className="spatial-status" aria-live="polite">{loading ? '문서 공간을 불러오는 중…' : failure ? <><span>{failure}</span><button type="button" onClick={() => void loadPage(activeQuery)}>다시 시도</button></> : !nodes.length ? (activeQuery ? '검색 결과가 없습니다.' : '아직 공개된 기록이 없습니다.') : <>{activeQuery ? `“${activeQuery}” 검색 결과 · ${nodes.length}개` : `최근 문서 · ${nodes.length}개`}{page?.hasMore ? ' · 더 있음' : ''}</>}</div>
-    <form className="spatial-search" data-hidden={!searchVisible && !inputFocused} onSubmit={submit}><label className="sr-only" htmlFor="spatial-query">지식 검색</label><input id="spatial-query" value={query} onChange={event => setQuery(event.target.value)} onFocus={() => setInputFocused(true)} onBlur={() => setInputFocused(false)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setComposing(false); setQuery(event.currentTarget.value); }} placeholder="문서와 맥락 검색" autoComplete="off"/><button type="submit">검색</button></form>
+    <div className="spatial-dock" data-hidden={dockHidden}>
+      <p className="spatial-status" aria-live="polite">{loading ? '문서 공간을 불러오는 중…' : failure ? <><span>{failure}</span><button type="button" onClick={() => void loadPage(activeQuery)}>다시 시도</button></> : !nodes.length ? (activeQuery ? '검색 결과가 없습니다.' : '아직 공개된 기록이 없습니다.') : <>{activeQuery ? `“${activeQuery}” 검색 결과 · ${nodes.length}개` : `최근 문서 · ${nodes.length}개`}{page?.hasMore ? ' · 더 있음' : ''} · {placementSentence}{relationSentence}</>}</p>
+      <form className="spatial-search" onSubmit={submit}><label className="sr-only" htmlFor="spatial-query">지식 검색</label><input id="spatial-query" value={query} onChange={event => setQuery(event.target.value)} onFocus={() => setInputFocused(true)} onBlur={() => setInputFocused(false)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setComposing(false); setQuery(event.currentTarget.value); }} placeholder="문서와 맥락 검색" autoComplete="off"/><button type="submit">검색</button></form>
+    </div>
     {(reader || readerLoading || readerError) && <SpatialReader state={reader} loading={readerLoading} error={readerError} onClose={() => { readerRequestRef.current?.abort(); setReader(null); setReaderError(''); setReaderLoading(false); viewportRef.current?.focus(); }} onOpen={(node, direction) => void openNode(node, direction)}/>} 
     {selectedNode && <p className="sr-only" aria-live="polite">선택됨: {selectedNode.title}</p>}
   </main>;

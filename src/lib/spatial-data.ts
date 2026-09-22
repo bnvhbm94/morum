@@ -215,6 +215,82 @@ export async function loadSpatialContext(target: ContentRef, depth: 1 | 2 = 1, s
   return apiGet<ContextPage>(`/context?${params}`, signal);
 }
 
+export async function loadSpatialContextMany(seeds: ContentRef[], depth: 1 | 2 = 1, signal?: AbortSignal): Promise<ContextPage> {
+  return apiPost<ContextPage>('/context', {seeds: seeds.slice(0, 5), depth}, signal);
+}
+
+export type LayoutEdge = {left: string; right: string; relation: Relation};
+
+function locationKey(ref: LocationRef): string {
+  return `${ref.kind}:${ref.id}`;
+}
+
+export function layoutEdges(relations: Relation[], nodeKeys: Set<string>): LayoutEdge[] {
+  const edges: LayoutEdge[] = [];
+  const seenPairs = new Set<string>();
+  for (const relation of relations) {
+    if (relation.from.kind !== 'version' || relation.to.kind !== 'version') continue;
+    const fromKey = locationKey(relation.from), toKey = locationKey(relation.to);
+    if (!nodeKeys.has(fromKey) || !nodeKeys.has(toKey)) continue;
+    let left: string, right: string;
+    if (relation.predicate === 'supports') { left = fromKey; right = toKey; }
+    else if (relation.predicate === 'corrects' || relation.predicate === 'derived_from' || relation.predicate === 'depends_on') { left = toKey; right = fromKey; }
+    else continue;
+    const pairKey = [left, right].sort().join('|');
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
+    edges.push({left, right, relation});
+  }
+  return edges;
+}
+
+export function layoutNodes<T extends {key: string}>(nodes: T[], edges: LayoutEdge[], spiral: (index: number) => {x: number; y: number}): (T & {x: number; y: number})[] {
+  const result: (T & {x: number; y: number})[] = [];
+  const occupied = new Map<string, number>();
+  const byKey = new Map<string, T & {x: number; y: number}>();
+
+  const cellKey = (x: number, y: number) => `${x},${y}`;
+  const place = (node: T, x: number, y: number) => {
+    const placed = {...node, x, y};
+    occupied.set(cellKey(x, y), result.length);
+    result.push(placed);
+    byKey.set(node.key, placed);
+  };
+
+  nodes.forEach((node, index) => {
+    if (index === 0) { place(node, 0, 0); return; }
+    let target: {x: number; y: number} | null = null;
+    for (const edge of edges) {
+      let otherKey: string | null = null, isLeft = false;
+      if (edge.left === node.key && byKey.has(edge.right)) { otherKey = edge.right; isLeft = true; }
+      else if (edge.right === node.key && byKey.has(edge.left)) { otherKey = edge.left; isLeft = false; }
+      if (!otherKey) continue;
+      const other = byKey.get(otherKey)!;
+      const wantX = isLeft ? other.x - 1 : other.x + 1;
+      const wantY = other.y;
+      if (!occupied.has(cellKey(wantX, wantY))) { target = {x: wantX, y: wantY}; break; }
+      const offsets = [1, -1, 2, -2];
+      let found: {x: number; y: number} | null = null;
+      for (const offset of offsets) {
+        const candidate = {x: wantX, y: wantY + offset};
+        if (!occupied.has(cellKey(candidate.x, candidate.y))) { found = candidate; break; }
+      }
+      if (found) { target = found; break; }
+    }
+    if (!target) {
+      let i = 0;
+      while (true) {
+        const candidate = spiral(i);
+        if (!occupied.has(cellKey(candidate.x, candidate.y))) { target = candidate; break; }
+        i += 1;
+      }
+    }
+    place(node, target.x, target.y);
+  });
+
+  return result;
+}
+
 function sameRef(a: LocationRef, b: LocationRef): boolean { return a.kind === b.kind && a.id === b.id; }
 
 export function relationSide(relation: Relation, target: LocationRef): RelationSide {

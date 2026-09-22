@@ -30,3 +30,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - Adaptation: header and dialog actions use a compact purple-tinted specular rim with keyboard focus styling.
 
 SpecularButton is used under the same ReactBits license notice above.
+
+## Pretendard Variable
+
+- Version: v1.3.9
+- Source: `https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2`
+- Upstream repository: `https://github.com/orioncactus/pretendard`
+- Local file: `public/fonts/PretendardVariable.woff2`
+
+Licensed under the SIL Open Font License, Version 1.1. Full license text: `https://scripts.sil.org/OFL`.
+
+## Source Serif 4 Variable
+
+- Source: `https://cdn.jsdelivr.net/npm/@fontsource-variable/source-serif-4@latest/files/source-serif-4-latin-wght-normal.woff2` and `…/source-serif-4-latin-ext-wght-normal.woff2`
+- Upstream project: `https://github.com/adobe-fonts/source-serif`
+- Local files: `public/fonts/SourceSerif4Variable-latin.woff2`, `public/fonts/SourceSerif4Variable-latin-ext.woff2`
+
+Licensed under the SIL Open Font License, Version 1.1. Full license text: `https://scripts.sil.org/OFL`.

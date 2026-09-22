@@ -11,6 +11,11 @@ test('home mounts the real-data spatial explorer without a mock document collect
   assert.match(source, /loadSpatialHome/);
   assert.match(source, /loadSpatialSearch/);
   assert.doesNotMatch(source, /mockDocuments|demoDocuments|const\s+documents\s*=\s*\[/i);
+  assert.match(source, /layoutNodes\(/);
+  assert.match(source, /className="spatial-dock" data-hidden=/);
+  assert.match(styles, /\.spatial-dock\[data-hidden="true"\]/);
+  assert.doesNotMatch(styles, /\.spatial-search::before/);
+  assert.match(styles, /@font-face[^}]*url\("\/fonts\/PretendardVariable\.woff2"\)/s);
 });
 
 test('spatial input guards drag clicks and stale or superseded requests', () => {
