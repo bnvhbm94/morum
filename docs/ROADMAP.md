@@ -45,7 +45,7 @@
 
 | # | 항목 | 완료 기준 | 방식 | 결정 |
 |---|---|---|---|---|
-| 1.1 ✅(push 대기) | 라이선스와 공개 위치 | `LICENSE`(코드), `LICENSE-DATA.md`(기여 데이터; AI 학습 이용 허용을 명시), `DCO`(기여자 서명 `git commit -s`) 커밋, GitHub 공개 저장소에 첫 push, `git remote` 존재 | 소유자 결정 → 계획 세션 커밋 → 소유자 push | **D1·D2·D3** |
+| 1.1 ✅ | 라이선스와 공개 위치 | `LICENSE`(코드), `LICENSE-DATA.md`(기여 데이터; AI 학습 이용 허용을 명시), `DCO`(기여자 서명 `git commit -s`) 커밋, GitHub 공개 저장소에 첫 push, `git remote` 존재 | 소유자 결정 → 계획 세션 커밋 → 소유자 push | D1·D2·D3 결정됨(2026-09-24) |
 | 1.2 ✅ | 기여 안내 | `CONTRIBUTING.md`(영어): 다섯 규칙, 핵심/가장자리, 추가 변경 체크리스트(Stripe식), "깨는 변경은 새 이름"(AT Protocol식), 제안=설명이 있는 PR(Matrix MSC식, 별도 RFC 저장소 없음), 로컬 테스트, 마이그레이션 규율, DCO | Sonnet 1명 | 없음 |
 | 1.3 ✅ | `.gitignore` 정리 | `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts` 제외; `git status` 깨끗 | 계획 세션 직접 | 없음 |
 | 1.4 ✅ | 테스트의 하드코딩 제거 + 마이그레이션 해시 고정 | 마이그레이션 목록·개수·태그·RPC 개수를 파일에서 도출(`readdirSync`); 커밋된 마이그레이션 파일의 sha256을 `supabase/migrations/.hashes.json`에 기록하고 변경되면 CI 실패(graphile-migrate식) | Sonnet 1명 | 없음 |
@@ -215,3 +215,4 @@
 - 2026-09-24: 위 두 갭을 마이그레이션 0113(`202609200113_dossier_agreements.sql`, 태그 `stage09-dossier-agreements`)으로 닫음: `kb_dossier`가 동의(agree) 검토 개별 행을 `agreements.reviews`(최대 50, 새 `agreements.truncated`)로 노출하고, `counterarguments.reviews`/`agreements.reviews`의 앵커 대상 `on`에 `exact`/`start`/`end`를 추가(새 `knowledge.review_on_ref`). `claimreview.ts`가 `agreements.reviews`에서 Supported 항목을 방출하고 앵커 `on.exact`를 `claimReviewed`로 사용하도록 갱신; 헤더의 두 DATA GAP 메모 제거. 계약은 `types.ts`에 additive로 반영(`CONTRACT_VERSION` 2.1.0 유지). 소유자의 `supabase db push --linked` 대기.
 - 2026-09-24 (새벽, 2차): 1.6의 RFC 9727 api-catalog 부분(`/.well-known/api-catalog`, capabilities의 Link 헤더) 완료(OpenAPI는 D10 뒤). 3.5 `scripts/metrics.mjs`와 `docs/METRICS.md` 완료 — 운영 데이터 기준선: found_* 0, 검토 5(needs_review/content), 정정 0. 마이그레이션 0113(dossier agreements) 추가. 대기: 소유자 `supabase db push --linked`(0112·0113) → 배포.
 - 2026-09-24 (오후): 마이그레이션 0112·0113 운영 push(소유자), 배포 morum-ppjklsnt3. 운영 확인: `/locate` unique 응답, dossier의 `claim_reviews`·`agreements.reviews`, `/.well-known/api-catalog`(linkset+json), capabilities Link 헤더.
+- 2026-09-24 (오후 2): D1 Apache-2.0+DCO, D2 CC0+AI 학습 허용, D3 개인 계정 공개 저장소로 결정. 라이선스 파일 커밋, https://github.com/bnvhbm94/morum 공개 push(1.1 완료). 1.9는 소유자 결정(첫 화면 문장 없음, 거리에 뜻이 있는 배치, 데스크톱 검색 단축키) 반영한 지시서로 구현 중.
