@@ -53,7 +53,7 @@ export function drawCategoryPoint(ctx: CanvasRenderingContext2D, screenPos: {x: 
   ctx.globalAlpha = alpha;
   ctx.fillStyle = '#f1ecff';
   ctx.beginPath();
-  ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+  ctx.arc(screenPos.x, screenPos.y, 1.6 + Math.min(2.4, Math.log2(1 + mass) * 0.6), 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }
@@ -117,7 +117,8 @@ export function drawCategoryGlow(ctx: CanvasRenderingContext2D, screenPos: {x: n
 
 /** The light of a star: a warm core that stays small on screen so planets and the name read over it. */
 export function drawStarCore(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, starRadiusPx: number, alpha: number): void {
-  const radius = Math.max(2.5, Math.min(48, starRadiusPx * 0.09));
+  // A distant star keeps a visible light of its own: never under 7px, growing slowly with the star, capped so planets and the name stay legible.
+  const radius = Math.max(7, Math.min(48, 4 + starRadiusPx * 0.08));
   const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radius);
   gradient.addColorStop(0, `rgba(255,248,236,${(0.95 * alpha).toFixed(3)})`);
   gradient.addColorStop(0.35, `rgba(255,240,220,${(0.35 * alpha).toFixed(3)})`);

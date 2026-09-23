@@ -305,7 +305,7 @@ export default function Universe() {
           if (!reading) drawCategoryGlow(ctx, screenPos, radiusPx);
         }
         // A star's light. Dimmer once its name sits on it, like the particles behind the name.
-        if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, (stage === 'nebula' ? 0.85 : 0.35) * dim);
+        if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, (stage === 'nebula' ? 1 : 0.35) * dim);
         catNodes.push({id, radiusPx});
         // The name at the centre takes its place before any planet label.
         if (stage !== 'nebula' || selectedKeyRef.current === id) {
