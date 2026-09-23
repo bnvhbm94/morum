@@ -49,10 +49,10 @@
 | 1.2 ✅ | 기여 안내 | `CONTRIBUTING.md`(영어): 다섯 규칙, 핵심/가장자리, 추가 변경 체크리스트(Stripe식), "깨는 변경은 새 이름"(AT Protocol식), 제안=설명이 있는 PR(Matrix MSC식, 별도 RFC 저장소 없음), 로컬 테스트, 마이그레이션 규율, DCO | Sonnet 1명 | 없음 |
 | 1.3 ✅ | `.gitignore` 정리 | `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts` 제외; `git status` 깨끗 | 계획 세션 직접 | 없음 |
 | 1.4 ✅ | 테스트의 하드코딩 제거 + 마이그레이션 해시 고정 | 마이그레이션 목록·개수·태그·RPC 개수를 파일에서 도출(`readdirSync`); 커밋된 마이그레이션 파일의 sha256을 `supabase/migrations/.hashes.json`에 기록하고 변경되면 CI 실패(graphile-migrate식) | Sonnet 1명 | 없음 |
-| 1.5 | 경로 등록표 | `ROUTES` 튜플을 항목 객체(method, path, auth, handler, query/body 스키마, response type, cost)로; `http.ts`의 if 사슬을 등록표 순회로; 동작 변화 0(service 165 통과) | Sonnet 1명, 계획 세션 설계 | **D10**(스키마를 zod로 쓸지) |
+| 1.5 ✅ | 경로 등록표 | `ROUTES` 튜플을 항목 객체(method, path, auth, handler, query/body 스키마, response type, cost)로; `http.ts`의 if 사슬을 등록표 순회로; 동작 변화 0(service 165 통과) | Sonnet 1명, 계획 세션 설계 | **D10**(스키마를 zod로 쓸지) |
 | 1.6 | OpenAPI 3.1 + api-catalog | 등록표에서 `public/openapi.json` 생성(`api-routes.json`과 같은 스크립트), 정적 테스트로 일치 검사, `/.well-known/api-catalog`(RFC 9727 linkset) 추가, `llms.txt`와 API 루트에서 링크 | 1.5 뒤 Sonnet 1명 | 없음 |
 | 1.7 | `mutate` 분해 + plpgsql_check | `knowledge.mutate`를 영수증 공통부 + 연산별 `create_*_core`로; `plpgsql_check` 확장으로 CI에서 함수 정적 검사; 마이그레이션 0111 + 롤백; DB 통과 | Sonnet 1명(SQL), 로컬 DB | push(소유자) |
-| 1.8 | 문서 언어 | 코드 문서(`DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`)는 영어 원본; 구상 문서(INTENT, CONTENT_STRATEGY, ROADMAP)는 한국어 원본 + 같은 구조의 영어 번역 파일, 파일 머리에 상호 링크 | Sonnet 1명 | 없음 |
+| 1.8 ✅ | 문서 언어 | 코드 문서(`DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`)는 영어 원본; 구상 문서(INTENT, CONTENT_STRATEGY, ROADMAP)는 한국어 원본 + 같은 구조의 영어 번역 파일, 파일 머리에 상호 링크 | Sonnet 1명 | 없음 |
 | 1.9 | 사이트 디테일(데이터 무관) | 첫 화면에 당위성 한 단락(첫 상호작용 후 사라짐), 읽기 모드에 근거별 `quote_check` 상태와 검토 계열 수, 구형 explorer·객체 페이지 정리, 폰 폭 간격; 행성 꾸미기 `attributes.appearance`(제한 팔레트의 색조·질감; 밝기·고리·흐림은 장부의 뜻으로 예약) | 설계: Opus 급에 설계 요청(팔레트·표시 규칙·문장 위치) → 소유자 선택 → 구현: Sonnet 1명 | 없음 |
 | 1.10 ✅ | 공개 전 보안 점검 | 모든 `knowledge` 테이블에 RLS 활성 + anon/authenticated 권한 없음을 DB 테스트로 고정; 브라우저 번들에 Supabase 키가 없음을 정적 테스트로 고정; 익명 쓰기 경로의 요청 한도 확인 | Sonnet 1명 | 없음 |
 
@@ -210,3 +210,4 @@
 - 2026-09-23 개정 1: 조사 에이전트 4명의 참고 사례를 항목마다 붙이고 7절대로 항목 수정. 1.10, 2.9, D10, D11 추가.
 - 2026-09-23 규칙에 '디자인은 성능 높은 모델에게 설계만 요청, 구현은 Sonnet' 추가(소유자 지시). 1.9·4.9 방식 수정.
 - 2026-09-23 (개정 1 이후): 1.2, 1.3, 1.4, 1.10 완료(커밋 b42a51b). 1.10 결과: 실제 스키마에서 위반 없음. CONTRIBUTING.md의 보안 연락처는 소유자가 채워야 함. `next-env.d.ts`는 추적 해제.
+- 2026-09-23 (밤): 1.5 경로 등록표(커밋 90cabf4, 배포 morum-bu1q7u3rv), 1.8 문서 언어(docs/en, docs/ko) 완료. 1.9는 설계안 A(Fable)·B(Opus)가 `docs/design/`에 있고 소유자 선택 대기. 2.1·2.9 구현 지시서 작성(`docs/design/`). 2.5 확인 목록은 `data/verification/`로 진행 중.
