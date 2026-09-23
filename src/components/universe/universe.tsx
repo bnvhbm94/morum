@@ -40,11 +40,11 @@ const CENTER_CATEGORY_ID = 'topic:Morum';
 /** Fraction of an opened category's radius where particles dim behind its centred name. */
 const NAME_QUIET_RATIO = 0.3;
 /** Planet labels: one line under the dot, culled like map labels when they would overlap. Their size follows the star's size on screen. */
-const LABEL_FONT_MIN_PX = 9.5;
-const LABEL_FONT_MAX_PX = 14;
+const LABEL_FONT_MIN_PX = 11;
+const LABEL_FONT_MAX_PX = 17;
 /** Star names sit at the centre and scale with the star; planet labels never sit on top of them. */
-const NAME_FONT_MIN_PX = 12;
-const NAME_FONT_MAX_PX = 30;
+const NAME_FONT_MIN_PX = 14;
+const NAME_FONT_MAX_PX = 38;
 /** Planet labels fade in as the star grows from this many screen pixels of radius to twice that. */
 const LABEL_FADE_START_PX = 160;
 const LABEL_MAX_PX = 192;
@@ -75,11 +75,11 @@ function itemLabel(item: UniverseItem): string {
 /** Flight time grows a little with the zoom change, so long dives read as travel and short hops stay quick. */
 /** Planet label font for a star of this screen radius. */
 function labelFontPx(starRadiusPx: number): number {
-  return Math.max(LABEL_FONT_MIN_PX, Math.min(LABEL_FONT_MAX_PX, starRadiusPx * 0.032));
+  return Math.max(LABEL_FONT_MIN_PX, Math.min(LABEL_FONT_MAX_PX, starRadiusPx * 0.04));
 }
 /** Star name font for a star of this screen radius. */
 function nameFontPx(starRadiusPx: number): number {
-  return Math.max(NAME_FONT_MIN_PX, Math.min(NAME_FONT_MAX_PX, starRadiusPx * 0.075));
+  return Math.max(NAME_FONT_MIN_PX, Math.min(NAME_FONT_MAX_PX, starRadiusPx * 0.09));
 }
 function flightMs(from: Camera, to: Camera): number {
   const ratio = Math.abs(Math.log2(to.scale / from.scale));
