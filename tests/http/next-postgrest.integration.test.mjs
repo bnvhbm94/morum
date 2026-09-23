@@ -2,6 +2,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createServer} from 'node:http';
 import {localHttpConfig} from './local-config.mjs';
+import {latestMigrationTag} from '../../scripts/migrations.mjs';
 const config=localHttpConfig();
 if(!config)test('Next + PostgREST real HTTP acceptance NOT RUN',{skip:'No acknowledged running local Next/PostgREST/PostgreSQL stack'},()=>{});
 else {
@@ -9,7 +10,7 @@ else {
  const {NuanoxClient}=await import('../../examples/nuanox-client.mjs');const {protocolFlow}=await import('../../examples/protocol-flow.mjs');
  test('actual local HTTP two-agent and route acceptance',async t=>{
   const db=new Client({connectionString:config.database.connectionString,connectionTimeoutMillis:5000});await db.connect();t.after(()=>db.end());await assertTestDatabase(db,config.database);
-  assert.equal((await db.query('select migration_tag from knowledge.schema_info where singleton')).rows[0].migration_tag,'stage07-read-surfaces');
+  assert.equal((await db.query('select migration_tag from knowledge.schema_info where singleton')).rows[0].migration_tag,await latestMigrationTag());
   const dir=await mkdtemp(join(tmpdir(),'nuanox-real-http-'));t.after(()=>rm(dir,{recursive:true,force:true}));
   const a=await NuanoxClient.initialize(config.origin,join(dir,'a','credential.json')),b=await NuanoxClient.initialize(config.origin,join(dir,'b','credential.json'));let r;
   await t.test('health, capabilities and authored public skill are real HTTP responses',async()=>{

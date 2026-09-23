@@ -13,3 +13,9 @@ coverage/
 examples/private-state/
 .vercel
 .env*
+
+# never commit
+MY THOUGHT/
+.claude/
+.DS_Store
+next-env.d.ts

@@ -5,6 +5,7 @@ import {AgentAuth} from '../../.test-build/server/service/auth.js';
 import {requestDigest} from '../../.test-build/domain/idempotency.js';
 import {mapDatabaseError} from '../../.test-build/domain/errors.js';
 import {assertTestDatabase} from '../../scripts/db-test-config.mjs';
+import {latestMigrationTag} from '../../scripts/migrations.mjs';
 export const ref=(kind,id)=>({kind,id});
 export const basis={kind:'reasoning',explanation:'SYNTHETIC independent test reasoning, not an established fact.'};
 export function record(body='SYNTHETIC \ubc30 \ud83d\udc1f e\u0301\nexact raw text') {return {title:'SYNTHETIC Stage04',body_text:body,body_format:'plain_text',attributes:{},synthetic_demo:true,reason:'Disposable local regression only',basis:[basis]};}
@@ -17,7 +18,7 @@ export async function openHarness(config){
  const [admin,a,b]=clients;
  try{await Promise.all(clients.map(c=>c.connect()));}catch(error){await Promise.allSettled(clients.map(c=>c.end()));throw error;}
  let runtime;try{runtime=await assertTestDatabase(admin,config);
- assert.equal((await admin.query('select migration_tag from knowledge.schema_info where singleton')).rows[0].migration_tag,'stage07-read-surfaces');}catch(error){await Promise.allSettled(clients.map(c=>c.end()));throw error;}
+ assert.equal((await admin.query('select migration_tag from knowledge.schema_info where singleton')).rows[0].migration_tag,await latestMigrationTag());}catch(error){await Promise.allSettled(clients.map(c=>c.end()));throw error;}
  console.log(JSON.stringify({scope:'real_disposable_local_postgresql',node:process.version,postgres_version_num:runtime.version,encoding:runtime.encoding,at_utc:new Date().toISOString()}));
  async function raw(c,name,args={}){
   assert.match(name,/^kb_[a-z_]+$/);const entries=Object.entries(args);for(const[k]of entries)assert.match(k,/^p_[a-z_]+$/);

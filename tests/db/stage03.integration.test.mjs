@@ -2,6 +2,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {testDatabaseConfig,assertTestDatabase} from '../../scripts/db-test-config.mjs';
+import {latestMigrationTag} from '../../scripts/migrations.mjs';
 const config=testDatabaseConfig();
 if(!config){test('Stage03 PostgreSQL integration NOT RUN',{skip:'No acknowledged disposable local PostgreSQL; no substitute database'},()=>{});}
 else {
@@ -19,7 +20,7 @@ else {
  test('Stage03 real database functional acceptance',async t=>{
   const pool=new Pool({connectionString:config.connectionString,max:4,connectionTimeoutMillis:5000});let dir;
   try{
-   const c=await pool.connect();try{await assertTestDatabase(c,config);const r=(await c.query("select migration_tag,contract_version from knowledge.schema_info where singleton")).rows[0];assert.equal(r.migration_tag,'stage07-read-surfaces');assert.equal(r.contract_version,'2.1.0');}finally{c.release();}
+   const c=await pool.connect();try{await assertTestDatabase(c,config);const r=(await c.query("select migration_tag,contract_version from knowledge.schema_info where singleton")).rows[0];assert.equal(r.migration_tag,await latestMigrationTag());assert.equal(r.contract_version,'2.1.0');}finally{c.release();}
    const db={async call(name,args){assert.match(name,/^kb_[a-z_]+$/);const entries=Object.entries(args);for(const[k]of entries)assert.match(k,/^p_[a-z_]+$/);const c=await pool.connect();try{await c.query('begin');await c.query('set local role service_role');await c.query("set local statement_timeout='15s'");const binds=entries.map(([key],i)=>`${key} => $${i+1}::jsonb`).join(',');const r=await c.query(`select public.${name}(${binds}) as value`,entries.map(([,v])=>JSON.stringify(v)));await c.query('commit');return r.rows[0].value;}catch(e){await c.query('rollback');throw mapDatabaseError(e);}finally{c.release();}}};
    const secret='isolated-test-not-a-deployed-secret-'.repeat(2),cursors=new CursorCodec(secret),rates=new RateLimiter(db,secret),auth=new AgentAuth(db,secret,true);
    const embeddings=new Embeddings({provider:'disabled',budgetApproved:false,dataSharingApproved:false,dailyTokenCap:0,requestTokenCap:0,timeoutMs:100},rates,()=>{throw Error('Provider calls forbidden in this DB suite');});

@@ -1,22 +1,35 @@
 /** These are SOURCE-ONLY checks, NOT a PostgreSQL parser or database evidence. */
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync,readdirSync} from 'node:fs';
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync,readdirSync} from 'node:fs';import {createHash} from 'node:crypto';
 import {testDatabaseConfig} from '../../scripts/db-test-config.mjs';
+import {listMigrations,listAllMigrationFiles,publicRpcNames,PROBE_FILE} from '../../scripts/migrations.mjs';
 const base=new URL('../../supabase/migrations/',import.meta.url);
 const files=readdirSync(base).filter(x=>x.endsWith('.sql')).sort();
 const sql=files.map(x=>readFileSync(new URL(x,base),'utf8')).join('\n');
-const productFiles=files.filter(x=>x!=='20260919153000_setup_connectivity.sql');
+const productFiles=files.filter(x=>x!==PROBE_FILE);
 const productSql=productFiles.map(x=>readFileSync(new URL(x,base),'utf8')).join('\n');
 const client=readFileSync(new URL('../../src/server/db/client.ts',import.meta.url),'utf8');
 const wrappers=[...sql.matchAll(/CREATE FUNCTION public\.(kb_\w+)\(([^)]*)\) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS/g)];
-test('SOURCE ONLY: setup probe plus ten ordered product migrations, with no destructive product schema changes',()=>{
- assert.deepEqual(files,['20260919153000_setup_connectivity.sql','202609200101_core.sql','202609200102_core_rpc.sql','202609200103_core_indexes.sql','202609200104_agent_service.sql','202609200105_retrieval.sql','202609200106_read_bounds.sql','202609200107_open_contribution.sql','202609200108_deferred_trigger_security.sql','202609200109_context_anonymous_reviews.sql','202609200110_read_surfaces.sql']);
- assert.match(readFileSync(new URL('20260919153000_setup_connectivity.sql',base),'utf8'),/create extension if not exists vector with schema extensions;/i);
+test('SOURCE ONLY: setup probe plus ordered product migrations, with no destructive product schema changes',async()=>{
+ const expectedProduct=await listMigrations(),expectedAll=await listAllMigrationFiles();
+ assert.deepEqual(files,expectedAll);
+ assert.deepEqual(productFiles,expectedProduct);
+ assert.match(readFileSync(new URL(PROBE_FILE,base),'utf8'),/create extension if not exists vector with schema extensions;/i);
  assert.doesNotMatch(productSql,/^\s*(DROP\s+(?:SCHEMA|TABLE|DATABASE)|TRUNCATE|CREATE\s+EXTENSION|ALTER\s+ROLE)\b/im);
 });
-test('SOURCE ONLY: public wrapper names match the backend allowlist; execute grants require DB verification',()=>{
+test('SOURCE ONLY: every committed migration file matches its pinned hash',async()=>{
+ const pinned=JSON.parse(readFileSync(new URL('.hashes.json',base),'utf8'));
+ const allFiles=await listAllMigrationFiles();
+ for(const file of Object.keys(pinned))
+  assert.ok(allFiles.includes(file),`pinned migration ${file} no longer exists; committed migrations are immutable; add a new migration instead`);
+ for(const file of allFiles){
+  const actual=createHash('sha256').update(readFileSync(new URL(file,base))).digest('hex');
+  assert.equal(actual,pinned[file],`hash mismatch for ${file}; committed migrations are immutable; add a new migration instead`);
+ }
+});
+test('SOURCE ONLY: public wrapper names match the backend allowlist; execute grants require DB verification',async()=>{
  const names=[...new Set([...client.matchAll(/'(kb_\w+)'/g)].map(x=>x[1]))].sort();
- const defined=[...new Set([...sql.matchAll(/CREATE(?: OR REPLACE)? FUNCTION public\.(kb_\w+)\(/g)].map(x=>x[1]))].sort();
- assert.equal(defined.length,42);assert.deepEqual(defined,names);
+ const defined=await publicRpcNames();
+ assert.deepEqual(defined,names);
  assert.match(sql,/REVOKE EXECUTE ON FUNCTION public\.kb_create_work_request/);
  assert.match(sql,/REVOKE ALL ON ALL FUNCTIONS IN SCHEMA knowledge FROM PUBLIC,anon,authenticated,service_role/);
 });
