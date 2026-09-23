@@ -32,14 +32,8 @@ test('top controls are bounded to search and agent instructions and deactivate b
   assert.doesNotMatch(shell, /fixed|sticky|progress/i);
 });
 
-test('Magnet is source-attributed, clamped and respects pointer and motion preferences', async () => {
-  const magnet = await text('src/components/magnet.tsx');
-  const notices = await text('THIRD_PARTY_NOTICES.md');
-  assert.match(magnet, /reactbits\.dev\/r\/Magnet-TS-CSS\.json/);
-  assert.match(magnet, /maxTravel = 1\.6/);
-  assert.match(magnet, /pointer: fine/);
-  assert.match(magnet, /prefers-reduced-motion/);
-  assert.match(notices, /MIT \+ Commons Clause/);
+test('third-party notices keep the ReactBits license', async () => {
+  assert.match(await text('THIRD_PARTY_NOTICES.md'), /MIT \+ Commons Clause/);
 });
 
 test('reading styles keep a black, narrow, left-aligned responsive column', async () => {

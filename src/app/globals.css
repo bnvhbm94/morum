@@ -183,10 +183,6 @@ a:hover { text-decoration-color: #ededed; }
 .topbar.nuanox-topbar .home-search { width: min(34vw, 22rem); }
 .nuanox-header-guides { display: flex; flex: 0 0 auto; align-items: center; gap: .6rem; }
 .nuanox-header-guides > * { flex: 0 0 auto; }
-.specular-button.nuanox-header-button {
-  min-height: 2.75rem; padding-inline: .9rem; white-space: nowrap;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
-}
 
 /* A portal keeps these elements outside .site-shell's positioning selectors. */
 dialog.nuanox-modal {

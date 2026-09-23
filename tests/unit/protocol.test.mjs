@@ -1,7 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';
 import * as text from '../../.test-build/domain/text.js';import {canonicalJSON} from '../../.test-build/domain/idempotency.js';
-import * as reference from '../../../tools/contract_reference.mjs';
-const vectors=JSON.parse(readFileSync(new URL('../../../contracts/PROTOCOL_VECTORS_V2.json',import.meta.url),'utf8')).vectors;
+// The reference implementation and vectors live outside this repository; skip those cases, not the whole file, when absent.
+const reference=await import('../../../tools/contract_reference.mjs').catch(()=>null);
+let vectors=[];try{vectors=JSON.parse(readFileSync(new URL('../../../contracts/PROTOCOL_VECTORS_V2.json',import.meta.url),'utf8')).vectors;}catch{}
+const externalSkip=reference&&vectors.length?false:'external ../tools/contract_reference.mjs or ../contracts/PROTOCOL_VECTORS_V2.json not present';
+if(externalSkip)test('production/reference protocol vectors',{skip:externalSkip},()=>{});
 function execute(p,v){const x=v.input;switch(v.op){
  case 'slice':return p.codePointSlice(x.text,x.start,x.end);case 'hash':return p.sha256(x.text);
  case 'validate':return p.validateBody(x.text);case 'utf16':return p.utf16ToCodePoint(x.text,x.offset);
@@ -31,6 +34,6 @@ test('edit application does not mutate callers or count UTF16 as codepoints',()=
  assert.equal(text.codePointToUtf16('a\ud83d\ude00b',2),3);assert.equal(text.utf16ToCodePoint('a\ud83d\ude00b',3),2);
 });
 test('canonical hash respects UTF16 key sort, arrays, -0 and exact strings',()=>{
- const x={'\uffff':1,'\ud800\udc00':2,a:-0};assert.equal(canonicalJSON(x),reference.canonicalJSON(x));
+ const x={'\uffff':1,'\ud800\udc00':2,a:-0};assert.equal(canonicalJSON(x),'{"a":0,"\ud800\udc00":2,"\uffff":1}');if(reference)assert.equal(canonicalJSON(x),reference.canonicalJSON(x));
  assert.notEqual(canonicalJSON([1,2]),canonicalJSON([2,1]));assert.notEqual(canonicalJSON('\uac00'),canonicalJSON('\u1100\u1161'));
 });
