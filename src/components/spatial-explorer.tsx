@@ -377,6 +377,10 @@ export default function SpatialExplorer() {
   }, [enterNode, level, navigateTo]);
 
   const goOut = useCallback((useHistory: boolean) => {
+    // A document opened from /universe returns there instead of to this explorer's galaxy level.
+    if (level.kind === 'near' && ownPushCountRef.current === 0 && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'universe') {
+      window.history.back(); return;
+    }
     let target: Level;
     if (level.kind === 'near') {
       target = level.galaxyKey || activeQueryRef.current ? {kind: 'mid', galaxyKey: level.galaxyKey || ''} : {kind: 'far'};

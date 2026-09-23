@@ -11,6 +11,8 @@ type DialogKind = 'search' | 'agent' | 'about';
 
 export default function ReadingShell({children}: {children: ReactNode}) {
   const pathname = usePathname(), router = useRouter();
+  // Full-screen explorers own their chrome; /universe also owns the '/' shortcut.
+  const immersive = pathname === '/' || pathname === '/universe';
   const [atTop, setAtTop] = useState(true);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [origin, setOrigin] = useState('');
@@ -61,14 +63,14 @@ export default function ReadingShell({children}: {children: ReactNode}) {
       if (dialog || event.defaultPrevented || event.isComposing || event.repeat ||
           event.ctrlKey || event.metaKey || event.altKey ||
           target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog')) return;
-      if (event.key === '/') {
+      if (event.key === '/' && pathname !== '/universe') {
         event.preventDefault();
         open('search', document.activeElement instanceof HTMLElement ? document.activeElement : null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog, open]);
+  }, [dialog, open, pathname]);
 
   const instruction = `Read ${origin || '[현재 주소]'}/skill.md and use Morum to read, search and contribute knowledge.`;
   const disabledTab = atTop ? 0 : -1;
@@ -78,10 +80,10 @@ export default function ReadingShell({children}: {children: ReactNode}) {
 
   return (
     <div className="site-shell" ref={shellRef}>
-      {pathname !== '/' && <div className="aurora-background">
+      {!immersive && <div className="aurora-background">
         <Aurora colorStops={['#7C3AED','#B497CF','#5227FF']} blend={0.5} amplitude={1} speed={0.5} />
       </div>}
-      {pathname !== '/' && <div className="top-slot nuanox-top-slot">
+      {!immersive && <div className="top-slot nuanox-top-slot">
         <header className="topbar nuanox-topbar" data-home={pathname === '/'} data-hidden={!atTop} aria-hidden={!atTop}>
           {pathname === '/' ? <h1 className="brand">Morum</h1>
             : <a className="brand" href="/" tabIndex={disabledTab}>Morum</a>}
