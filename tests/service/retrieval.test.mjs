@@ -13,6 +13,7 @@ test('disabled semantic path performs no external calls and retains raw locator'
  let providerCalls=0;const hit=candidate();const s=setup({kb_search_state:()=>({eligible_units:1,indexed_units:0}),kb_search:()=>searchPage([hit],status)});
  const embeddings=new Embeddings(off,s.rates,async()=>{providerCalls++;throw Error('not allowed');});const r=new Retrieval(s.db,s.cursors,embeddings);
  const result=await r.search({query:'\uc81c\uc8fc\ub3c4 \ubc30',scope:'current',include_context:false});assert.equal(providerCalls,0);assert.equal(result.status.mode,'keyword_only');assert.equal(result.status.reason,'disabled');assert.equal(result.hits[0].locator.start,10);assert.equal(result.hits[0].rrf_score,1/61);assert.equal(result.suggested_work_request,null);
+ assert.equal(s.calls.filter(x=>x.name==='kb_search_state').length,0,'kb_search recounts units, so the disabled path skips the pre-count round trip');
 });
 test('hybrid combines explicit ranks, not invented truth scores',async()=>{
  const hit={...candidate(),semantic_rank:2};let outbound;

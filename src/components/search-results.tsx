@@ -10,7 +10,7 @@ export default function SearchResults({query, scope}: {query: string; scope: Sea
     if (!query.trim()) { setResult(null); setHits([]); return; }
     setLoading(true); setError(''); setCursorExpired(false);
     try {
-      const data = await apiPost<SearchResponse>('/search', {query, scope, limit: 10, include_context: true, ...(cursor ? {cursor} : {})}, signal);
+      const data = await apiPost<SearchResponse>('/search', {query, scope, limit: 10, include_context: false, ...(cursor ? {cursor} : {})}, signal);
       setResult(data); setHits(previous => cursor ? [...previous, ...data.hits] : data.hits);
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'CURSOR_EXPIRED') { setCursorExpired(true); setError('검색 페이지가 만료되었습니다. 같은 조건으로 처음부터 다시 검색할 수 있습니다.'); }
@@ -26,7 +26,6 @@ export default function SearchResults({query, scope}: {query: string; scope: Sea
     {!loading && !error && query && hits.length === 0 && <p className="muted">일치하는 지식을 찾지 못했습니다.</p>}
     <ol className="content-list">{hits.map((hit, index) => <li className="content-item" key={`${hit.unit_id}-${index}`}><a className="content-link" href={resultHref(hit)}>{hit.title || hit.snippet || `검색 결과 ${index + 1}`}</a>{hit.title && <p className="snippet">{hit.snippet}</p>}<p className="metadata">{hit.is_current === true ? '현재 버전' : hit.is_current === false ? '이전 버전' : '연결된 객체'}{hit.snippet_truncated ? ' · 발췌' : ''}</p><span className="card-arrow" aria-hidden="true">↗</span></li>)}</ol>
     {result?.page.next_cursor && <button className="secondary-action load-more" type="button" disabled={loading} onClick={() => run(result.page.next_cursor)}>{loading ? '불러오는 중…' : '다음 결과'}</button>}
-    {result?.context_coverage.requested && result.context_coverage.omitted_targets.length > 0 && <p className="status-copy">이 페이지의 일부 맥락은 범위 제한으로 펼치지 않았습니다. 각 결과의 원문에서 계속 탐색할 수 있습니다.</p>}
   </>;
 }
 

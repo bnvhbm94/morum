@@ -26,11 +26,14 @@ export class Retrieval implements SearchReadPort {
    sql._snapshot_id=c.snapshot_id;sql._scan_index=c.scan_index;sql._profile_id=c.profile_id;
   }else{
    const available=this.embeddings.availability()===null;sql._profile_id=available?PROFILE:null;
-   const counts=checkedRpc<{eligible_units:number;indexed_units:number;profile_compatible?:boolean}>(await this.db.call('kb_search_state',{p_query:sql}),value=>checkSearchCounts(value,available));
-   status={...status,eligible_units:counts.eligible_units,indexed_units:counts.indexed_units,profile_id:available?PROFILE:null};
-   if(available&&!counts.profile_compatible)status.reason='profile_mismatch';
-   else if(available&&counts.indexed_units>0){const e=await this.embeddings.embed(q.query);sql._vector=e.vector;status={...status,query_embedding:e.vector?'ready':e.attempted?'failed':'not_attempted',reason:e.reason};}
-   else if(available&&counts.eligible_units>0)status.reason='index_pending';
+   // kb_search recounts eligible/indexed units itself; the pre-count only decides whether to embed the query.
+   if(available){
+    const counts=checkedRpc<{eligible_units:number;indexed_units:number;profile_compatible?:boolean}>(await this.db.call('kb_search_state',{p_query:sql}),value=>checkSearchCounts(value,available));
+    status={...status,eligible_units:counts.eligible_units,indexed_units:counts.indexed_units,profile_id:PROFILE};
+    if(!counts.profile_compatible)status.reason='profile_mismatch';
+    else if(counts.indexed_units>0){const e=await this.embeddings.embed(q.query);sql._vector=e.vector;status={...status,query_embedding:e.vector?'ready':e.attempted?'failed':'not_attempted',reason:e.reason};}
+    else if(counts.eligible_units>0)status.reason='index_pending';
+   }
    sql._status=status;
   }
   const page=checkedRpc<T.RetrievalPage>(await this.db.call('kb_search',{p_query:sql}),checkSearchPage);

@@ -13,6 +13,7 @@ import type {AgentContext} from './auth.js';
 import {HttpError,readJson,readRecordBody,queryParams,intQuery} from './transport.js';
 import {matchRoute,allowedMethods} from './routes.js';
 import {PROFILE} from './embeddings.js';
+import {SINGLE_OBJECT_MAX_BYTES} from '../db/client.js';
 const BASE='/api/v2';
 const headers=(id:string):Record<string,string>=>({'cache-control':'no-store','x-content-type-options':'nosniff','x-contract-version':CONTRACT_VERSION,'x-request-id':id,'referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; frame-ancestors 'none'"});
 function success(data:unknown,id:string,replayed=false,status=200,maxBytes=1048576):Response{
@@ -112,9 +113,9 @@ export function createHandler(factory:()=>Services,health:()=>Promise<T.Health>=
    }
    switch(template){
     case '/records':{const q=queryParams(url,['limit','cursor']);return respond(await s.repo.listRecords(listQuery(q)));}
-    case '/records/:record_id':queryParams(url,[]);return respond(await s.repo.getRecord(p.record_id));
+    case '/records/:record_id':queryParams(url,[]);return respond(await s.repo.getRecord(p.record_id),false,200,SINGLE_OBJECT_MAX_BYTES);
     case '/records/:record_id/versions':{const q=queryParams(url,['limit','cursor']);return respond(await s.repo.listVersions(p.record_id,listQuery(q)));}
-    case '/versions/:version_id':queryParams(url,[]);return respond(await s.repo.getVersion(p.version_id));
+    case '/versions/:version_id':queryParams(url,[]);return respond(await s.repo.getVersion(p.version_id),false,200,SINGLE_OBJECT_MAX_BYTES);
     case '/versions/:version_id/raw':{
      queryParams(url,[]);const raw=await s.repo.getRaw(p.version_id);ensure(typeof raw==='string','DEPENDENCY_UNAVAILABLE');const tag=`"sha256:${sha256(raw)}"`;
      const h={...headers(id),'content-type':'text/plain; charset=utf-8',etag:tag};
@@ -126,7 +127,7 @@ export function createHandler(factory:()=>Services,health:()=>Promise<T.Health>=
      return respond(await s.repo.getPart(p.version_id,{start,end,context_before:intQuery(q.context_before,0,1000,400),context_after:intQuery(q.context_after,0,1000,400),cursor:q.cursor}));
     }
     case '/sources/:source_id':queryParams(url,[]);return respond(await s.repo.getSource(p.source_id));
-    case '/objects/:kind/:id':queryParams(url,[]);ref(p,CONTENT);return respond(await s.repo.getObject(p as T.ContentRef));
+    case '/objects/:kind/:id':queryParams(url,[]);ref(p,CONTENT);return respond(await s.repo.getObject(p as T.ContentRef),false,200,SINGLE_OBJECT_MAX_BYTES);
     case '/annotations':{const q=queryParams(url,['version_id','limit','cursor']);uuid(q.version_id);return respond(await s.repo.listAnnotations({...listQuery(q),version_id:q.version_id}));}
     case '/relations':{const q=queryParams(url,['target_kind','target_id','direction','limit','cursor']);const t=targetQuery(q,['version','anchor','source']);ensure(q.direction===undefined||['in','out','both'].includes(q.direction));return respond(await s.repo.listRelations({...listQuery(q),target_kind:t.kind as T.LocationRef['kind'],target_id:t.id,direction:(q.direction??'both') as 'in'|'out'|'both'}));}
     case '/evidence':{const q=queryParams(url,['target_kind','target_id','limit','cursor']);const t=targetQuery(q,['version','anchor','source','relation','annotation','review']);return respond(await s.repo.listEvidence({...listQuery(q),target_kind:t.kind as T.EvidenceTargetRef['kind'],target_id:t.id}));}

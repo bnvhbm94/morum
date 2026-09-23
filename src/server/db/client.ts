@@ -17,6 +17,9 @@ export function databaseConfig(env:NodeJS.ProcessEnv=process.env):DatabaseConfig
  if(!url||!secretKey)fail('NOT_CONFIGURED');
  return {url,secretKey,keyMode};
 }
+/** Single-object reads embed every attached basis item, so a few large evidence rows must not make an exact version unreadable (worst case ~1.8 MB). */
+export const SINGLE_OBJECT_MAX_BYTES=3145728;
+const SINGLE_OBJECT_RPCS=new Set(['kb_get_record','kb_get_version','kb_get_object']);
 async function boundedText(response:Response,max:number):Promise<string> {
  const reader=response.body?.getReader();if(!reader)fail('DEPENDENCY_UNAVAILABLE');
  const chunks:Uint8Array[]=[];let bytes=0;
@@ -47,7 +50,7 @@ export class SupabaseRpcClient implements RpcClient {
     const response=await this.transport(`${this.origin}/rest/v1/rpc/${name}`,{
      method:'POST',headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.timeout(this.config.timeoutMs??15000)
     });
-    let value:unknown;try{value=JSON.parse(await boundedText(response,this.config.maxResponseBytes??1048576));}
+    let value:unknown;try{value=JSON.parse(await boundedText(response,SINGLE_OBJECT_RPCS.has(name)?Math.max(SINGLE_OBJECT_MAX_BYTES,this.config.maxResponseBytes??0):this.config.maxResponseBytes??1048576));}
     catch(error){if(error instanceof DomainError)throw error;fail('DEPENDENCY_UNAVAILABLE');}
     if(!response.ok){
      const driver=value as {code?:unknown};const retry=driver?.code==='40001'||driver?.code==='40P01';

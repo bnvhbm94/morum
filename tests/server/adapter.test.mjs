@@ -69,3 +69,14 @@ test('missing configuration and explicit legacy mode remain distinct',()=>{
  const x=databaseConfig({NEXT_PUBLIC_SUPABASE_URL:'http://localhost:54321',SUPABASE_KEY_MODE:'legacy',SUPABASE_SERVICE_ROLE_KEY:randomBytes(32).toString('hex')});assert.equal(x.keyMode,'legacy');
  assert.throws(()=>databaseConfig({NEXT_PUBLIC_SUPABASE_URL:'http://localhost',SUPABASE_KEY_MODE:'invented',SUPABASE_SECRET_KEY:'not-used'}),e=>e.code==='NOT_CONFIGURED');
 });
+test('encoding a cursor for a snapshot that just expired reports CURSOR_EXPIRED, not an internal error',()=>{
+ const c=new CursorCodec(randomBytes(32).toString('base64url'),()=>now);
+ assert.throws(()=>c.encode('search-v2',{q:1},{snapshot_id:'x'},new Date(now-1).toISOString()),e=>e.code==='CURSOR_EXPIRED');
+ assert.throws(()=>c.encode('search-v2',{q:1},{snapshot_id:'x'},new Date(now+700000).toISOString()),e=>e.code==='INTERNAL_ERROR');
+});
+test('single-object reads get a larger byte cap so attached evidence cannot make a version unreadable',async()=>{
+ const big=JSON.stringify({pad:'x'.repeat(1200000)}),transport=async()=>new Response(big);
+ const c=new SupabaseRpcClient({url:'https://project.example.invalid',secretKey:randomBytes(32).toString('hex')},transport);
+ assert.equal((await c.call('kb_get_version',{})).pad.length,1200000);
+ await rejected(c.call('kb_list_records',{}),'PAYLOAD_TOO_LARGE');
+});

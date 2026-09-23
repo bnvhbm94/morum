@@ -9,7 +9,9 @@ export class CursorCodec {
  constructor(private readonly secret:string,private readonly now:()=>number=Date.now){ensure(Buffer.byteLength(secret)>=32,'NOT_CONFIGURED');}
  bind(scope:string,query:Record<string,unknown>):string{return sha256(canonicalJSON({scope,query}));}
  encode(scope:string,query:Record<string,unknown>,fields:Record<string,unknown>,expiresAt:string):string {
-  const exp=Date.parse(expiresAt);ensure(Number.isFinite(exp)&&exp>this.now()&&exp<=this.now()+610000,'INTERNAL_ERROR');
+  const exp=Date.parse(expiresAt);ensure(Number.isFinite(exp)&&exp<=this.now()+610000,'INTERNAL_ERROR');
+  // The snapshot can expire between the SQL read and this encode; report it the way decode does.
+  if(exp<=this.now())fail('CURSOR_EXPIRED');
   const payload={...fields,v:1,scope,binding:this.bind(scope,query),exp};
   const text=Buffer.from(canonicalJSON(payload)).toString('base64url');
   return `${text}.${this.sign(text).toString('base64url')}`;
