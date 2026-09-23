@@ -37,11 +37,23 @@ export interface TextSelector {
   start: number; end: number; exact: string;
   prefix: string; suffix: string;
 }
-export interface AnchorInput {
-  version_id: UUID; body_sha256: SHA256; selector: TextSelector;
+/**
+ * anchor.create input: same as TextSelector, but start/end may be omitted;
+ * when absent, the server locates the unique occurrence of exact (filtered
+ * by prefix/suffix when given) instead of requiring a code-point range.
+ * prefix/suffix are independently optional too (default "" when absent).
+ * Output (Anchor.selector) is always the fully resolved TextSelector.
+ */
+export interface TextSelectorInput {
+  unit: "unicode_code_point";
+  start?: number; end?: number; exact: string;
+  prefix?: string; suffix?: string;
 }
-export interface Anchor extends AnchorInput {
-  id: UUID; created_by: UUID | null; created_at: ISODateTime;
+export interface AnchorInput {
+  version_id: UUID; body_sha256: SHA256; selector: TextSelectorInput;
+}
+export interface Anchor extends Omit<AnchorInput, "selector"> {
+  id: UUID; created_by: UUID | null; created_at: ISODateTime; selector: TextSelector;
 }
 export type EvidenceBasis =
   | { kind: "external"; source_id: UUID; quote: string | null; explanation: string }
@@ -97,7 +109,11 @@ export interface CreateRecordRequest {
 }
 export type NormalizedRecordRequest = Required<CreateRecordRequest>;
 export interface TextEdit {
-  start: number; end: number; exact: string; replacement: string;
+  // start/end are optional on input, same quote-resolution rule as
+  // TextSelector; prefix/suffix (max 32 code points) disambiguate a quote.
+  // Output (stored in version_changes) always has start/end resolved.
+  start?: number; end?: number; exact: string; replacement: string;
+  prefix?: string; suffix?: string;
 }
 export interface MetadataUpdate {
   title?: string | null;
@@ -138,6 +154,15 @@ export type AnchorProjection =
   | { state: "candidate"; selector: TextSelector; requires_confirmation: true }
   | { state: "needs_reanchor"; reason: "edited_or_boundary" }
   | { state: "not_projected"; reason: "not_direct_parent" };
+/** Body for POST /versions/:version_id/locate: locate a quote before writing an anchor or edit. */
+export interface LocateRequest { exact: string; prefix?: string; suffix?: string; }
+export interface LocateCandidate { start: number; end: number; prefix: string; suffix: string; }
+export interface LocateResult {
+  version_id: UUID; body_sha256: SHA256;
+  state: "unique" | "ambiguous" | "not_found";
+  candidates: LocateCandidate[]; // 1 for unique, 2-10 for ambiguous, 0 for not_found.
+  truncated: boolean; // true once an 11th occurrence is found; candidates stay capped at 10.
+}
 export type ReviewStance = "agree" | "disagree" | "needs_review";
 export type ReviewFocus = "content" | "evidence_support" | "quote_match" | "meaning";
 export interface CreateReviewRequest {
@@ -305,6 +330,8 @@ export interface Dossier {
   omitted: DossierOmitted;
   blind: boolean;
   generated_at: ISODateTime;
+  /** Roadmap 2.9: schema.org ClaimReview JSON-LD, additive; rendered by claimreview.ts. */
+  claim_reviews?: unknown[];
 }
 export type AttentionReason = "quote_not_found" | "contested" | "no_basis" | "requested" | "quote_unverifiable" | "unreviewed" | "uncategorized";
 export interface AttentionItem {
@@ -320,6 +347,7 @@ export type ErrorCode =
   "UNAUTHENTICATED" | "AMBIGUOUS_AUTH" | "FORBIDDEN" | "AGENT_NOT_APPROVED" |
   "KEY_REVOKED" | "NOT_FOUND" | "RESOURCE_GONE" | "CLAIM_EXPIRED" | "CLAIM_TAKEN" |
   "BASE_HASH_MISMATCH" | "TEXT_MISMATCH" | "OVERLAPPING_EDITS" | "NO_CHANGE" |
+  "SELECTOR_NOT_FOUND" | "AMBIGUOUS_SELECTOR" |
   "IDEMPOTENCY_CONFLICT" | "REVIEW_HEAD_CHANGED" | "TASK_REVISION_CONFLICT" |
   "CURSOR_EXPIRED" | "CURSOR_INVALID" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" |
   "NOT_CONFIGURED" | "DEPENDENCY_UNAVAILABLE" | "INTERNAL_ERROR";

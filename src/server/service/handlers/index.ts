@@ -36,6 +36,7 @@ export const HANDLERS:ReadonlyMap<string,Handler>=new Map<string,Handler>([
  ['GET /versions/:version_id',reads.getVersion],
  ['GET /versions/:version_id/raw',reads.getRaw],
  ['GET /versions/:version_id/part',reads.getPart],
+ ['POST /versions/:version_id/locate',reads.locate],
  ['POST /anchors',mutations.mutationHandler],
  ['GET /objects/:kind/:id',reads.getObject],
  ['POST /sources',mutations.mutationHandler],

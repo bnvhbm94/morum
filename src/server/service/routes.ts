@@ -30,6 +30,7 @@ export const ROUTES:readonly RouteEntry[]=[
  {method:'GET',path:'/versions/:version_id',auth:'public',response:'VersionView',summary:'Returns a specific version by id.',query:[]},
  {method:'GET',path:'/versions/:version_id/raw',auth:'public',response:'text/plain',summary:'Returns the exact raw body text of a version.',query:[]},
  {method:'GET',path:'/versions/:version_id/part',auth:'public',response:'PartView',summary:'Returns a bounded slice of a version body with surrounding context.',query:['start','end','context_before','context_after','cursor']},
+ {method:'POST',path:'/versions/:version_id/locate',auth:'public',response:'LocateResult',summary:'Finds where a quoted passage occurs in a version body.',query:[]},
  {method:'POST',path:'/anchors',auth:'contribution',response:'Anchor',summary:'Creates a text-quote anchor into a version.',query:[],command:'anchor.create'},
  {method:'GET',path:'/objects/:kind/:id',auth:'public',response:'ObjectView',summary:'Returns any content object by kind and id.',query:[]},
  {method:'POST',path:'/sources',auth:'contribution',response:'Source',summary:'Creates a submitted source record.',query:[],command:'source.create'},

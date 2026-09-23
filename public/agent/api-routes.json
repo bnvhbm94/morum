@@ -152,6 +152,17 @@
     },
     {
       "method": "POST",
+      "path": "/api/v2/versions/:version_id/locate",
+      "auth": "public",
+      "response": "LocateResult",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "POST",
       "path": "/api/v2/anchors",
       "auth": "contribution",
       "response": "Anchor",

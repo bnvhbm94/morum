@@ -42,7 +42,8 @@ test('dossier json passes blind through and returns data',async()=>{
  const s=setup({kb_dossier:args=>{captured=args;return dossier;}});
  const r=await s.handle(s.req(`/dossier?target_kind=version&target_id=${id}&blind=true`,'GET',undefined,{auth:false}));
  assert.equal(r.status,200);assert.equal(captured.p_query.blind,true);assert.equal(captured.p_query.target.kind,'version');
- assert.deepEqual((await r.json()).data,dossier);
+ // claim_reviews (roadmap 2.9) is additive: same RPC data plus that one extra field.
+ assert.deepEqual((await r.json()).data,{...dossier,claim_reviews:[]});
 });
 test('dossier text renders header, data envelopes, omitted section and truncated body',async()=>{
  const dossier=fakeDossier();
@@ -64,6 +65,45 @@ test('dossier text reports blind counterarguments line',async()=>{
  assert(text.includes('[COUNTERARGUMENTS hidden by blind=true | keyed 2 · anonymous 1]'));
 });
 test('dossier rejects non-version target_kind',async()=>{const s=setup();const r=await s.handle(s.req(`/dossier?target_kind=source&target_id=${id}`,'GET',undefined,{auth:false}));assert.equal(r.status,422);});
+
+// --- /dossier claim_reviews (roadmap 2.9) ---
+// This harness always builds requests against http://localhost (see req() in helpers.mjs), which
+// is not a *.vercel.app host, so the origin is expected to pass through unchanged here; the
+// canonical-origin collapse for a *.vercel.app preview host is unit-tested directly in
+// tests/unit/claimreview.test.mjs (publicOrigin), against the request's real origin/hostname.
+test('dossier json includes claim_reviews built from counterargument reviews; text format is unchanged',async()=>{
+ const reviewId=randomUUID();
+ const dossier=fakeDossier({counterarguments:{
+  reviews:[{id:reviewId,stance:'disagree',focus:'content',on:{kind:'version',id},created_by:randomUUID(),created_at:now(),declared:null,explanation:'Synthetic disagreement'}],
+  contradicts:[],groups:{keyed_actors:1,anonymous_reviews:0,declared_model_families:0},
+ }});
+ const s=setup({kb_dossier:()=>dossier});
+ const jsonRes=await s.handle(s.req(`/dossier?target_kind=version&target_id=${id}`,'GET',undefined,{auth:false}));
+ assert.equal(jsonRes.status,200);
+ const body=await jsonRes.json();
+ assert.equal(body.data.claim_reviews.length,1);
+ assert.equal(body.data.claim_reviews[0].url,`http://localhost/versions/${id}#review-${reviewId}`);
+ assert.equal(body.data.claim_reviews[0].reviewRating.alternateName,'Disputed');
+ assert.doesNotMatch(JSON.stringify(body.data.claim_reviews),/ratingValue/);
+ // Every other field from the RPC is passed through unchanged alongside the additive field.
+ for(const key of Object.keys(dossier))assert.deepEqual(body.data[key],dossier[key]);
+
+ const textRes=await s.handle(s.req(`/dossier?target_kind=version&target_id=${id}&format=text`,'GET',undefined,{auth:false}));
+ const text=await textRes.text();
+ assert.doesNotMatch(text,/claim_reviews|ClaimReview/);
+});
+test('dossier json claim_reviews author is anonymous when the review has no created_by',async()=>{
+ const reviewId=randomUUID();
+ const dossier=fakeDossier({counterarguments:{
+  reviews:[{id:reviewId,stance:'needs_review',focus:'evidence_support',on:{kind:'version',id},created_by:null,created_at:now(),declared:null,explanation:'Synthetic'}],
+  contradicts:[],groups:{keyed_actors:0,anonymous_reviews:1,declared_model_families:0},
+ }});
+ const s=setup({kb_dossier:()=>dossier});
+ const r=await s.handle(s.req(`/dossier?target_kind=version&target_id=${id}`,'GET',undefined,{auth:false}));
+ const body=await r.json();
+ assert.equal(body.data.claim_reviews[0].author.name,'Morum anonymous reviewer');
+ assert.equal(body.data.claim_reviews[0].reviewRating.alternateName,'Needs review');
+});
 
 // --- /attention ---
 test('attention validates reasons',async()=>{const s=setup();const r=await s.handle(s.req('/attention?reasons=bogus','GET',undefined,{auth:false}));assert.equal(r.status,422);});

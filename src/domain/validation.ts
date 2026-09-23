@@ -84,10 +84,25 @@ export function validateCommand(op:MutationName,value:unknown):void {
   text(o.title,240,1,true);validateBody(o.body_text);format(o.body_format);attributes(o.attributes);one(o.synthetic_demo,[true,false]);text(o.reason,2000);bases(o.basis);meaningful(o.body_text as string,o.attributes as T.Attributes);break;
  case 'version.create':
   uuid(o.base_version_id);hash(o.base_body_sha256);ensure(Array.isArray(o.edits)&&o.edits.length<=20);
-  for(const raw of o.edits){const e=object(raw,['start','end','exact','replacement'],['start','end','exact','replacement']);integer(e.start,0,100000);integer(e.end,e.start as number,100000);validateBody(e.exact);validateBody(e.replacement);}
+  for(const raw of o.edits){
+   const e=object(raw,['start','end','exact','replacement','prefix','suffix'],['exact','replacement']);
+   ensure((e.start!==undefined)===(e.end!==undefined));
+   if(e.start!==undefined){integer(e.start,0,100000);integer(e.end,e.start as number,100000);}
+   const exact=validateBody(e.exact);validateBody(e.replacement);
+   text(e.prefix!==undefined?e.prefix:'',32,0);text(e.suffix!==undefined?e.suffix:'',32,0);
+   if(exact.length===0&&e.start===undefined)ensure(cpLength((e.prefix as string|undefined)??'')>0&&cpLength((e.suffix as string|undefined)??'')>0);
+  }
   if('metadata_update'in o)validateMetadata(o.metadata_update);text(o.reason,2000);bases(o.basis,1);break;
  case 'anchor.create':{
-  uuid(o.version_id);hash(o.body_sha256);const s=object(o.selector,['unit','start','end','exact','prefix','suffix'],['unit','start','end','exact','prefix','suffix']);one(s.unit,['unicode_code_point']);integer(s.start,0,99999);integer(s.end,(s.start as number)+1,100000);validateBody(s.exact);text(s.prefix,32,0);text(s.suffix,32,0);break;}
+  uuid(o.version_id);hash(o.body_sha256);
+  const s=object(o.selector,['unit','start','end','exact','prefix','suffix'],['unit','exact']);
+  one(s.unit,['unicode_code_point']);
+  ensure((s.start!==undefined)===(s.end!==undefined));
+  if(s.start!==undefined){integer(s.start,0,99999);integer(s.end,(s.start as number)+1,100000);}
+  const exact=validateBody(s.exact);
+  text(s.prefix!==undefined?s.prefix:'',32,0);text(s.suffix!==undefined?s.suffix:'',32,0);
+  if(exact.length===0&&s.start===undefined)ensure(cpLength((s.prefix as string|undefined)??'')>0&&cpLength((s.suffix as string|undefined)??'')>0);
+  break;}
  case 'source.create':
   if(o.url!==null){text(o.url,2048);let url:URL;try{url=new URL(o.url as string);}catch{fail('VALIDATION_FAILED');}
    ensure(!/\s/.test(o.url as string)&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!!url.hostname&&/^https?:\/\//i.test(o.url as string));}

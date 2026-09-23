@@ -5,6 +5,7 @@ import {uuid} from '../../../domain/validation.js';
 import {queryParams,intQuery,HttpError} from '../transport.js';
 import {checkedRpc,checkUrlReport,checkDossier,checkAttention} from '../rpc-shapes.js';
 import {renderDossierText} from '../dossier-text.js';
+import {renderClaimReviews,publicOrigin} from '../claimreview.js';
 import type {Handler} from './index.js';
 
 export const urlReport:Handler=async ({url,services:s,respond})=>{
@@ -26,7 +27,9 @@ export const dossier:Handler=async (ctx)=>{
   const body=renderDossierText(dossierData,budget);
   return rawResponse(body,{'content-type':'text/plain; charset=utf-8'});
  }
- return respond(dossierData,false,200,1048576);
+ // Roadmap 2.9: additive field, text format above is unchanged.
+ const claim_reviews=renderClaimReviews(dossierData,publicOrigin(url.origin));
+ return respond({...dossierData,claim_reviews},false,200,1048576);
 };
 
 export const attention:Handler=async ({url,services:s,respond})=>{

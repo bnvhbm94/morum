@@ -27,17 +27,21 @@ export function utf16ToCodePoint(text:string,offset:number):number {
 export function codePointToUtf16(text:string,offset:number):number {
  return codePointSlice(text,0,offset).length;
 }
+// These low-level functions operate only on fully-resolved (positional) edits/selectors;
+// quote-based resolution (start/end absent) happens server-side in SQL, never here.
+type ResolvedTextEdit = TextEdit & {start:number;end:number};
 export function editsConflict(a:TextEdit,b:TextEdit):boolean {
+ ensure(a.start!==undefined&&a.end!==undefined&&b.start!==undefined&&b.end!==undefined);
  const az=a.start===a.end,bz=b.start===b.end;
  if(az&&bz)return a.start===b.start;
  if(az)return b.start<=a.start&&a.start<=b.end;
  if(bz)return a.start<=b.start&&b.start<=a.end;
  return Math.max(a.start,b.start)<Math.min(a.end,b.end);
 }
-export function validateEdits(body:string,edits:TextEdit[]):void {
+export function validateEdits(body:string,edits:TextEdit[]):asserts edits is ResolvedTextEdit[] {
  validateBody(body);ensure(Array.isArray(edits)&&edits.length<=20);
  for(const e of edits){
-  ensure(e&&typeof e==='object');validateBody(e.exact);validateBody(e.replacement);
+  ensure(e&&typeof e==='object'&&e.start!==undefined&&e.end!==undefined);validateBody(e.exact);validateBody(e.replacement);
   if(codePointSlice(body,e.start,e.end)!==e.exact)fail('TEXT_MISMATCH');
  }
  for(let i=0;i<edits.length;i++)for(let j=i+1;j<edits.length;j++)if(editsConflict(edits[i],edits[j]))fail('OVERLAPPING_EDITS');

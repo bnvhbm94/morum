@@ -114,6 +114,12 @@ export function checkDossier(value:unknown):void {
  object(d.agreements);arr(d.evidence);arr(d.premises);arr(d.meanings);arr(d.related);object(d.omitted);
  bool(d.blind);date(d.generated_at);
 }
+export function checkLocate(value:unknown):void {
+ const r=object(value);uuid(r.version_id);hash(r.body_sha256);one(r.state,['unique','ambiguous','not_found']);
+ const candidates=arr(r.candidates,10);
+ for(const value of candidates){const c=object(value);integer(c.start,0);integer(c.end,c.start as number);text(c.prefix,32,0);text(c.suffix,32,0);}
+ bool(r.truncated);
+}
 export function checkAttention(value:unknown):void {
  const a=object(value);const items=arr(a.items,50);
  for(const item of items){const i=object(item);text(i.reason,64);integer(i.priority);ref(i.target,CONTENT);date(i.since);}

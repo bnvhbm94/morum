@@ -1,10 +1,11 @@
 import 'server-only';
 import type * as T from '../../../contracts/types.js';
 import {ensure} from '../../../domain/errors.js';
-import {ref,text,uuid,CONTENT} from '../../../domain/validation.js';
+import {object,ref,text,uuid,CONTENT} from '../../../domain/validation.js';
 import {sha256} from '../../../domain/hash.js';
-import {queryParams,intQuery} from '../transport.js';
+import {queryParams,readJson,intQuery} from '../transport.js';
 import {SINGLE_OBJECT_MAX_BYTES} from '../../db/client.js';
+import {checkedRpc,checkLocate} from '../rpc-shapes.js';
 import {targetQuery} from './shared.js';
 import type {Handler} from './index.js';
 
@@ -36,6 +37,16 @@ export const getPart:Handler=async ({url,params:p,services:s,respond})=>{
 };
 
 export const getSource:Handler=async ({url,params:p,services:s,respond})=>{queryParams(url,[]);return respond(await s.repo.getSource(p.source_id));};
+
+export const locate:Handler=async ({url,params:p,request,services:s,respond})=>{
+ queryParams(url,[]);uuid(p.version_id);
+ const body=object(await readJson(request,16384),['exact','prefix','suffix'],['exact']);
+ text(body.exact,100000,0);
+ const prefix=body.prefix!==undefined?body.prefix:'',suffix=body.suffix!==undefined?body.suffix:'';
+ text(prefix,32,0);text(suffix,32,0);
+ const result=checkedRpc<T.LocateResult>(await s.db.call('kb_locate',{p_query:{version_id:p.version_id,exact:body.exact,prefix,suffix}}),checkLocate);
+ return respond(result,false,200,262144);
+};
 
 export const getObject:Handler=async ({url,params:p,services:s,respond})=>{queryParams(url,[]);ref(p,CONTENT);return respond(await s.repo.getObject(p as T.ContentRef),false,200,SINGLE_OBJECT_MAX_BYTES);};
 

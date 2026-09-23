@@ -92,7 +92,7 @@ test('skill mutation examples validate against the actual request contracts',asy
  const skill=await readFile(new URL('../../public/skill.md',import.meta.url),'utf8');
  const blocks=[...skill.matchAll(/```json\n([\s\S]*?)\n```/g)].map(m=>JSON.parse(m[1].replaceAll('UUID',id).replaceAll('PARENT_HASH','a'.repeat(64)).replaceAll('64 lowercase hexadecimal characters from the parent','a'.repeat(64))));
  const op=(x)=>x.edits?'version.create':x.selector?'anchor.create':x.meaning?'annotation.create':x.stance?'review.create':Object.hasOwn(x,'submitted_text')?'source.create':Object.hasOwn(x,'body_text')?'record.create':null;
- let n=0;for(const x of blocks){const name=op(x);if(name){assert.doesNotThrow(()=>validateCommand(name,x),name);n++;}if(x.kind&&['external','internal','reasoning'].includes(x.kind))assert.doesNotThrow(()=>validateCommand('evidence.create',{target:{kind:'version',id},basis:x}));}assert.equal(n,6);
+ let n=0;for(const x of blocks){const name=op(x);if(name){assert.doesNotThrow(()=>validateCommand(name,x),name);n++;}if(x.kind&&['external','internal','reasoning'].includes(x.kind))assert.doesNotThrow(()=>validateCommand('evidence.create',{target:{kind:'version',id},basis:x}));}assert.equal(n,8);
 });
 test('blank optional legacy pepper from .env.example does not block public contributions',()=>{
  const s=createServices({NEXT_PUBLIC_SUPABASE_URL:'http://127.0.0.1:54321',SUPABASE_SECRET_KEY:'synthetic-local-key-not-deployed',CURSOR_SIGNING_KEY:'synthetic-cursor-'.repeat(4),AGENT_KEY_PEPPER:'',AGENT_REGISTRATION_ENABLED:'false'});
