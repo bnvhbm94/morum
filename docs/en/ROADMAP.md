@@ -45,7 +45,7 @@ Goal: a state where someone else can clone the repo, run the tests, and open a P
 
 | # | Item | Completion criteria | Method | Decision |
 |---|---|---|---|---|
-| 1.1 | License and public location | `LICENSE` (code), `LICENSE-DATA.md` (contributed data; states that AI-training use is allowed), `DCO` (contributor sign-off `git commit -s`) committed, first push to a public GitHub repository, `git remote` exists | Owner decides → planning session commits → owner pushes | **D1, D2, D3** |
+| 1.1 ✅(awaiting push) | License and public location | `LICENSE` (code), `LICENSE-DATA.md` (contributed data; states that AI-training use is allowed), `DCO` (contributor sign-off `git commit -s`) committed, first push to a public GitHub repository, `git remote` exists | Owner decides → planning session commits → owner pushes | **D1, D2, D3** |
 | 1.2 ✅ | Contribution guide | `CONTRIBUTING.md` (English): the five rules, core / open edge, an additive-change checklist (Stripe-style), "a breaking change gets a new name" (AT Protocol-style), a proposal = a PR with an explanation (Matrix MSC-style, no separate RFC repo), local testing, migration discipline, DCO | One Sonnet | None |
 | 1.3 ✅ | Clean up `.gitignore` | Excludes `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts`; `git status` clean | Planning session directly | None |
 | 1.4 ✅ | Remove hardcoding from tests + pin migration hashes | Migration list/count/tag/RPC count derived from files (`readdirSync`); sha256 of committed migration files recorded in `supabase/migrations/.hashes.json`, and CI fails on change (graphile-migrate style) | One Sonnet | None |

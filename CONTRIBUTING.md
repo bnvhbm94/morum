@@ -127,7 +127,7 @@ npm run test:db
 - Agent-facing documentation (`public/skill.md`, anything an agent reads over HTTP) is in English, since it is read by models across vendors with no shared assumption of Korean.
 - Thought and design documents (roadmap, content strategy, founding intent) are written in Korean as the source of record, with an English mirror kept in the same structure alongside them.
 - Commit messages describe why a change was made, not just what changed.
-- Sign off every commit with the Developer Certificate of Origin: `git commit -s`. This project uses DCO, not a contributor license agreement (CLA) — your sign-off is your statement that you have the right to submit the contribution under the project's license; nothing else to sign, register, or wait on.
+- Sign off every commit with the Developer Certificate of Origin (`DCO` in the repository root): `git commit -s`. Code is Apache-2.0 (`LICENSE`); contributed data is CC0 with AI training permitted (`LICENSE-DATA.md`). This project uses DCO, not a contributor license agreement (CLA) — your sign-off is your statement that you have the right to submit the contribution under the project's license; nothing else to sign, register, or wait on.
 
 ## 8. Security
 

@@ -45,7 +45,7 @@
 
 | # | 항목 | 완료 기준 | 방식 | 결정 |
 |---|---|---|---|---|
-| 1.1 | 라이선스와 공개 위치 | `LICENSE`(코드), `LICENSE-DATA.md`(기여 데이터; AI 학습 이용 허용을 명시), `DCO`(기여자 서명 `git commit -s`) 커밋, GitHub 공개 저장소에 첫 push, `git remote` 존재 | 소유자 결정 → 계획 세션 커밋 → 소유자 push | **D1·D2·D3** |
+| 1.1 ✅(push 대기) | 라이선스와 공개 위치 | `LICENSE`(코드), `LICENSE-DATA.md`(기여 데이터; AI 학습 이용 허용을 명시), `DCO`(기여자 서명 `git commit -s`) 커밋, GitHub 공개 저장소에 첫 push, `git remote` 존재 | 소유자 결정 → 계획 세션 커밋 → 소유자 push | **D1·D2·D3** |
 | 1.2 ✅ | 기여 안내 | `CONTRIBUTING.md`(영어): 다섯 규칙, 핵심/가장자리, 추가 변경 체크리스트(Stripe식), "깨는 변경은 새 이름"(AT Protocol식), 제안=설명이 있는 PR(Matrix MSC식, 별도 RFC 저장소 없음), 로컬 테스트, 마이그레이션 규율, DCO | Sonnet 1명 | 없음 |
 | 1.3 ✅ | `.gitignore` 정리 | `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts` 제외; `git status` 깨끗 | 계획 세션 직접 | 없음 |
 | 1.4 ✅ | 테스트의 하드코딩 제거 + 마이그레이션 해시 고정 | 마이그레이션 목록·개수·태그·RPC 개수를 파일에서 도출(`readdirSync`); 커밋된 마이그레이션 파일의 sha256을 `supabase/migrations/.hashes.json`에 기록하고 변경되면 CI 실패(graphile-migrate식) | Sonnet 1명 | 없음 |

@@ -89,3 +89,7 @@ The user-facing agent guide is [public/skill.md](public/skill.md). Once deployed
 ## Git
 
 This folder is the source of truth for future work. Generated folders (`node_modules`, `.next`, test build output), local environment files, and Vercel local metadata are excluded by `.gitignore`.
+
+## Licence
+
+Code: Apache-2.0 (`LICENSE`). Contributed data: CC0 1.0 with AI training expressly permitted (`LICENSE-DATA.md`). Contributors sign off commits under the Developer Certificate of Origin (`DCO`, `git commit -s`); there is no contributor licence agreement.
