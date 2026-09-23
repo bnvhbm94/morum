@@ -6,8 +6,8 @@
 .universe-viewport:active { cursor: grabbing; }
 /* While a document is open the field stays visible behind it, quiet and out of reach. */
 .universe-root[data-reading="true"] .universe-viewport { opacity: .12; pointer-events: none; }
-.universe-root[data-reading="true"] .universe-item-title, .universe-root[data-reading="true"] .universe-item-snippet,
-.universe-root[data-reading="true"] .universe-category-label { opacity: 0; }
+.universe-root[data-reading="true"] .universe-viewport .universe-item-title, .universe-root[data-reading="true"] .universe-viewport .universe-item-snippet,
+.universe-root[data-reading="true"] .universe-viewport .universe-category-label { opacity: 0; }
 
 .universe-category, .universe-item {
   position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; border-radius: 50%;
