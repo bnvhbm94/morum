@@ -1,13 +1,13 @@
 /* Continuous universe explorer. Visual language borrowed from .spatial-* (black/violet, serif titles,
    Pretendard UI text, frosted search pill). No card borders, no lines between nodes: circles, dots and light only. */
 .universe-root, .site-shell > .universe-root { position: fixed; inset: 0; overflow: hidden; background: #0c0910; color: #f1ecff; touch-action: none; }
-.universe-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; transition: filter 320ms ease; }
-.universe-viewport { position: fixed; inset: 0; z-index: 1; cursor: grab; touch-action: none; transition: opacity 260ms ease, filter 320ms ease; }
-/* The open document is in focus; the field behind it falls just out of it. */
-.universe-root[data-reading="true"] .universe-canvas, .universe-root[data-reading="true"] .universe-viewport { filter: blur(2px); }
+.universe-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; transition: opacity 260ms ease; }
+.universe-viewport { position: fixed; inset: 0; z-index: 1; cursor: grab; touch-action: none; transition: opacity 260ms ease; }
+/* While a document is open the field is switched off entirely; it comes back where it was when the document closes. */
+.universe-root[data-reading="true"] .universe-canvas { opacity: 0; }
 .universe-viewport:active { cursor: grabbing; }
 /* While a document is open the field stays visible behind it, quiet and out of reach. */
-.universe-root[data-reading="true"] .universe-viewport { opacity: .12; pointer-events: none; }
+.universe-root[data-reading="true"] .universe-viewport { opacity: 0; pointer-events: none; }
 .universe-root[data-reading="true"] .universe-viewport .universe-item-title, .universe-root[data-reading="true"] .universe-viewport .universe-item-snippet,
 .universe-root[data-reading="true"] .universe-viewport .universe-category-label { opacity: 0; }
 

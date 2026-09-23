@@ -559,8 +559,9 @@ export default function Universe() {
 
   // ---- Reader ---------------------------------------------------------------------------------------------
 
+  /** `camera` moves the view only for arrivals from search or a link; a tap opens the document where the view already is. */
   function openReader(target: ReaderTarget, camera: Camera | null, push: boolean): void {
-    if (!readerRef.current) returnCameraRef.current = {...cameraRef.current};
+    if (!readerRef.current) returnCameraRef.current = camera ? {...cameraRef.current} : null;
     readerRef.current = target;
     setReader(target);
     relatedRef.current = new Map();
@@ -588,10 +589,8 @@ export default function Universe() {
   function openItem(item: UniverseItem, categoryId: string, push = true): void {
     const category = categoriesRef.current.get(categoryId);
     if (!item.versionId || !category) { window.location.assign(item.href); return; }
-    const circle = itemCirclesRef.current.get(categoryId)?.get(item.id)?.circle;
     select(itemKey(categoryId, item.id));
-    openReader({kind: 'doc', versionId: item.versionId, role: 'planet', categoryId, categoryLabel: category.category.label, planetCount: category.category.directCount},
-      circle ? fitCircle(viewportRef.current, circle, 0.35) : null, push);
+    openReader({kind: 'doc', versionId: item.versionId, role: 'planet', categoryId, categoryLabel: category.category.label, planetCount: category.category.directCount}, null, push);
   }
 
   async function openStar(categoryId: string, push = true): Promise<void> {
@@ -602,7 +601,7 @@ export default function Universe() {
     if (!mountedRef.current) return;
     const common = {categoryId, categoryLabel: entry.category.label, planetCount: entry.category.directCount};
     const target: ReaderTarget = doc?.versionId ? {kind: 'doc', versionId: doc.versionId, role: 'star', ...common} : {kind: 'star-missing', ...common};
-    openReader(target, fitCircle(viewportRef.current, entry.star, 0.8), push);
+    openReader(target, null, push);
   }
 
   /** From the reader: open another version (an earlier one, a related record). Camera stays; the field marks it if it is here. */
