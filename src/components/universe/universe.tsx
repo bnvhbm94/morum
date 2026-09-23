@@ -106,7 +106,7 @@ function flightMs(from: Camera, to: Camera): number {
   return Math.max(420, Math.min(900, 420 + ratio * 110));
 }
 
-export default function Universe() {
+export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -436,7 +436,7 @@ export default function Universe() {
     if (categoryId) params.set('c', categoryId);
     if (target?.kind === 'doc') params.set('doc', target.versionId);
     if (target?.kind === 'star-missing') params.set('star', target.categoryId);
-    const url = params.size ? `/universe?${params.toString()}` : '/universe';
+    const url = params.size ? `/?${params.toString()}` : '/';
     if (push) window.history.pushState({universe: true}, '', url);
     else window.history.replaceState({universe: true}, '', url);
   }
@@ -834,6 +834,9 @@ export default function Universe() {
         for (const cat of roots) { const circle = circles.get(cat.id); if (circle) placeCategory(cat, circle, null, undefined); }
         if (containerRef.current) { viewportRef.current = {width: containerRef.current.clientWidth, height: containerRef.current.clientHeight}; resizeCanvas(); }
         const params = new URLSearchParams(window.location.search);
+        // /versions/:id server-renders the universe with the document's id in the path, not the query
+        // string: fold it in here as if it had arrived as ?doc=, the same deep-link shape the field already reads.
+        if (initialDoc && !params.has('doc') && !params.has('star')) params.set('doc', initialDoc);
         const target = params.get('c');
         const targetEntry = target ? categoriesRef.current.get(target) : null;
         // With no explicit target, open on the "Morum" star itself (its own field guide), framed close enough
@@ -852,6 +855,13 @@ export default function Universe() {
         markCameraChanged();
         await restoreReader(params, controller.signal);
         schedulePaint();
+        // /search redirects here with ?q=: fill the pill and run the same search a typed query would.
+        const initialQuery = params.get('q');
+        if (initialQuery && initialQuery.trim()) {
+          openSearch();
+          setQuery(initialQuery);
+          void runSearch(initialQuery);
+        }
       } catch (error) {
         // Roots stay empty; nothing to place. An aborted load (React's dev double-mount) is expected.
         if (!(error instanceof DOMException && error.name === 'AbortError')) console.error(error);

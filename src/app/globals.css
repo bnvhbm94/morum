@@ -270,89 +270,13 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 }
 /* END NUANOX INTRODUCTION AND MODALS V1 */
 
-/* Spatial document explorer */
-.spatial-explorer, .site-shell > .spatial-explorer { position: fixed; inset: 0; overflow: hidden; background: #050505; color: #f4f1f7; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; touch-action: none; }
-.spatial-dots { position: absolute; inset: -40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23ffffff' fill-opacity='.17'/%3E%3C/svg%3E"); background-size: 28px 28px; pointer-events: none; will-change: background-position; }
-.spatial-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
-.spatial-viewport:active { cursor: grabbing; }
-.spatial-world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; will-change: transform; }
-.spatial-node { --node-light: .42; -webkit-user-select: none; user-select: none; position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: min(340px, 72vw); min-height: 180px; translate: -50% -50%; border: 0; padding: 1rem 0; color: color-mix(in srgb, #fff calc(var(--node-light) * 100%), #4b4b4b); background: transparent; text-align: left; font: inherit; cursor: pointer; animation: spatial-node-in 240ms ease both; transition: color 120ms linear, left 320ms cubic-bezier(.22,.61,.36,1), top 320ms cubic-bezier(.22,.61,.36,1); }
-@keyframes spatial-node-in { from { opacity: 0; translate: -50% calc(-50% + 6px); } }
-.spatial-node::before { content: ""; position: absolute; inset: -.6rem -1rem; border-radius: 1.2rem; background: rgb(255 255 255 / 0); transition: background 180ms ease; }
-.spatial-node:hover::before, .spatial-node:focus-visible::before { background: rgb(255 255 255 / .025); }
-.spatial-node:focus-visible { outline: 0; }
-.spatial-node:focus-visible .spatial-node-title { text-decoration: underline; text-underline-offset: .25em; }
-.spatial-node > span { position: relative; display: block; }
-.spatial-node > .spatial-node-copy { display: -webkit-box; overflow: hidden; color: inherit; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: 1rem; line-height: 1.7; word-break: keep-all; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
-.spatial-node[data-dim="true"] { color: color-mix(in srgb, #6f6f6f calc(var(--node-light) * 100%), #3a3a3a); }
-.spatial-node[data-foreign="true"] { opacity: .55; }
-.spatial-galaxy { --node-light: .42; -webkit-user-select: none; user-select: none; position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: min(340px, 72vw); translate: -50% -50%; border: 0; padding: 1rem; color: color-mix(in srgb, #fff calc(var(--node-light) * 100%), #4b4b4b); background: transparent; text-align: center; font: inherit; cursor: pointer; animation: spatial-node-in 240ms ease both; transition: color 120ms linear; }
-.spatial-galaxy::before { content: ""; position: absolute; inset: -.6rem -1rem; border-radius: 1.2rem; background: rgb(255 255 255 / 0); transition: background 180ms ease; }
-.spatial-galaxy:hover::before, .spatial-galaxy:focus-visible::before { background: rgb(255 255 255 / .025); }
-.spatial-galaxy:focus-visible { outline: 0; }
-.spatial-galaxy:focus-visible .spatial-galaxy-name { text-decoration: underline; text-underline-offset: .25em; }
-.spatial-galaxy > span { position: relative; display: block; }
-.spatial-galaxy-name { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: clamp(1.6rem, 3vw, 2.3rem); line-height: 1.15; letter-spacing: -.03em; }
-.spatial-galaxy-count { margin-top: .5rem; font-size: .72rem; letter-spacing: .02em; color: #6f6f6f; }
-.spatial-galaxy[data-untagged="true"] .spatial-galaxy-name { color: #8a8a8a; }
-.spatial-galaxy[data-selected="true"] { color: #fff; }
-.spatial-planet { position: absolute; left: 0; top: 0; width: min(34rem, 86vw); max-height: min(72vh, 46rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: pan-y; translate: -50% -50%; padding: 1rem; color: #ecebee; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: 1.02rem; line-height: 1.75; cursor: auto; -webkit-user-select: text; user-select: text; animation: spatial-node-in 240ms ease both; }
-.spatial-planet::-webkit-scrollbar { display: none; }
-::highlight(reading-paragraph) { background-color: rgb(255 255 255 / .13); color: #fff; }
-::highlight(reading-paragraph-fading) { background-color: rgb(255 255 255 / .06); }
-.spatial-planet-title { margin: 0 0 1.1rem; color: #f4f1f7; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: clamp(1.35rem, 2.4vw, 1.7rem); font-weight: 500; line-height: 1.35; word-break: keep-all; }
-.spatial-planet-text { white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; }
-.spatial-cite { color: inherit; background: rgb(255 255 255 / .07); box-shadow: inset 0 -1px 0 rgb(255 255 255 / .35); border-radius: .15em; padding: 0 .05em; transition: background 160ms ease; }
-.spatial-cite sup { margin-left: .1em; color: #9a9a9a; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-size: .62em; line-height: 0; -webkit-user-select: none; user-select: none; }
-.spatial-planet[data-cite] .spatial-cite { background: rgb(255 255 255 / .03); }
-.spatial-planet[data-cite="1"] .spatial-cite[data-n="1"], .spatial-planet[data-cite="2"] .spatial-cite[data-n="2"], .spatial-planet[data-cite="3"] .spatial-cite[data-n="3"], .spatial-planet[data-cite="4"] .spatial-cite[data-n="4"], .spatial-planet[data-cite="5"] .spatial-cite[data-n="5"], .spatial-planet[data-cite="6"] .spatial-cite[data-n="6"], .spatial-planet[data-cite="7"] .spatial-cite[data-n="7"], .spatial-planet[data-cite="8"] .spatial-cite[data-n="8"] { background: rgb(255 255 255 / .18); }
-.spatial-cite-quote, .spatial-cite-why, .spatial-cite-where, .spatial-cite-none { display: block; }
-.spatial-cite-quote { margin-top: .3rem; color: #d9d9d9; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: .9rem; line-height: 1.55; }
-.spatial-cite-quote::before { content: "“"; } .spatial-cite-quote::after { content: "”"; }
-.spatial-cite-none { margin-top: .3rem; color: #5c5c5c; }
-.spatial-cite-why { margin-top: .3rem; color: #8a8a8a; font-size: .74rem; }
-.spatial-cite-where { margin-top: .3rem; color: #6a6a6a; font-size: .68rem; }
-.spatial-planet-links { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; margin-top: 1.4rem; font-size: .7rem; line-height: 1.5; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
-.spatial-planet-links a { color: #7c7c7c; text-decoration-color: rgb(255 255 255 / .25); }
-.spatial-satellites { position: absolute; top: 0; width: 16rem; translate: -50% -50%; display: grid; gap: 1.1rem; }
-.spatial-satellites[data-side="left"] { left: calc(-1.15 * 430px); }
-.spatial-satellites[data-side="right"] { left: calc(1.15 * 430px); }
-.spatial-satellite { position: relative; width: 100%; padding: .5rem .75rem; border-radius: .6rem; cursor: pointer; color: #a3a3a3; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; animation: spatial-node-in 240ms ease both; }
-.spatial-satellite[data-selected="true"] { background: rgb(255 255 255 / .035); color: #d6d6d6; }
-.spatial-satellite b { display: block; margin-bottom: .25rem; color: #6e6e6e; font-weight: 500; font-size: .66rem; letter-spacing: .06em; }
-.spatial-satellite[data-kind="version"] { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: .9rem; color: #8d8d8d; }
-.spatial-satellite[data-kind="empty"] { color: #5c5c5c; }
-.spatial-satellite a { color: inherit; }
-.spatial-satellite a:hover { color: #fff; }
-.spatial-message { position: absolute; left: 0; top: 0; width: min(38rem, calc(100vw - 3rem)); translate: -50% -50%; margin: 0; text-align: center; color: #c9c5cb; }
-.spatial-message button { margin-left: .8rem; border: 0; padding: 0; color: #ddd; background: transparent; text-decoration: underline; cursor: pointer; }
-.spatial-crumb { margin: 0; min-height: 1.2em; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; text-align: center; max-width: 100%; }
-.spatial-crumb button { border: 0; padding: 0; color: #cfcfcf; background: transparent; font: inherit; text-decoration: underline; text-underline-offset: .22em; cursor: pointer; }
-.spatial-node[data-selected="true"] { color: #fff; }
-.spatial-dock { position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); translate: -50% 0; z-index: 4; width: min(35rem, calc(100% - 2rem)); display: grid; gap: .55rem; justify-items: center; transition: translate 260ms ease, opacity 260ms ease; }
-.spatial-dock[data-hidden="true"] { translate: -50% calc(100% + 2.5rem); opacity: 0; pointer-events: none; }
-.spatial-search { display: flex; width: 100%; min-height: 3rem; overflow: hidden; border: 0; border-radius: 999px; background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .1), inset 0 1px 0 rgb(255 255 255 / .18), 0 .8rem 2.4rem rgb(0 0 0 / .45); backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%); }
-.spatial-search input { flex: 1; min-width: 0; border: 0; padding: 0 1.3rem; color: #fff; background: transparent; outline: 0; font: inherit; font-size: .95rem; }
-.spatial-search input::placeholder { color: #9a9a9a; }
-.spatial-search button { border: 0; padding: 0 1.3rem; color: #c4c4c4; background: transparent; font: inherit; font-size: .75rem; cursor: pointer; }
-@media (max-width: 850px) {
-  .spatial-node { width: min(310px, 78vw); }
-  .spatial-dock { width: calc(100% - 2rem); }
-  .spatial-crumb { white-space: normal; }
-  .spatial-galaxy { width: min(310px, 78vw); }
-  .spatial-satellites { width: 12rem; }
-  .spatial-satellites[data-side="left"] { left: calc(-1.15 * 300px); }
-  .spatial-satellites[data-side="right"] { left: calc(1.15 * 300px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spatial-search, .spatial-world { transition: none; animation: none; }
-  .spatial-node { animation: none; transition: color 120ms linear; }
-}
-
 /* Text-first archive direction */
-html, body { background: #000; }
+html, body { background: #0c0910; }
 body { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Apple SD Gothic Neo", "Malgun Gothic", Georgia, serif; font-size: 20px; line-height: 1.6; }
-.site-shell { --aurora-opacity: .72; background: #000; }
+.site-shell { --aurora-opacity: .72; background: #0c0910; }
+/* The legacy reading pages point back into the universe instead of duplicating its chrome. */
+.universe-back-link { display: inline-block; margin: 0 0 2rem; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-size: .78rem; color: #8a8496; text-decoration-color: rgb(138 132 150 / .5); }
+.universe-back-link:hover { color: #f1ecff; text-decoration-color: currentColor; }
 .aurora-background { position: absolute; inset: 0 0 auto; height: 62rem; opacity: var(--aurora-opacity); transform: translateZ(0); will-change: opacity; }
 .top-slot, .top-slot.nuanox-top-slot { height: 5.25rem; }
 .topbar, .topbar.nuanox-topbar { width: min(100% - 3rem, 45rem); height: 5.25rem; gap: 1.25rem; }

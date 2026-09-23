@@ -1,5 +1,5 @@
 import {headers} from 'next/headers';
-import VersionReader from '../../../components/version-reader';
+import Universe from '../../../components/universe/universe';
 import type * as T from '../../../contracts/types';
 import {uuid} from '../../../domain/validation';
 import {createServices} from '../../../server/service/factory';
@@ -9,15 +9,15 @@ import {renderClaimReviews, publicOrigin, claimReviewScript, type ClaimReviewJso
 /**
  * Roadmap 2.9: server-render ClaimReview JSON-LD for this version's public reviews.
  *
- * VersionReader below is a Client Component: it fetches the version and everything related
- * to it (annotations, relations, evidence, reviews) from the browser via /api/v2, after
- * mount. That is too late for crawlers that read the initial HTML only, so the dossier used
- * for JSON-LD is fetched here instead, server-side, once, directly through the same server
- * service the /api/v2/dossier route uses (`createServices()` + `kb_dossier`) — not an HTTP
- * round trip to our own API. Any failure here (an invalid id, the database being
- * unconfigured, a dependency error, ...) is swallowed and simply omits the script tag;
- * VersionReader's own client-side fetch still renders the page and its own error UI
- * regardless, so this enrichment is additive and never blocks the page.
+ * Universe below is a Client Component: it fetches the version and everything related to it
+ * (annotations, relations, evidence, reviews) from the browser via /api/v2, after mount. That
+ * is too late for crawlers that read the initial HTML only, so the dossier used for JSON-LD is
+ * fetched here instead, server-side, once, directly through the same server service the
+ * /api/v2/dossier route uses (`createServices()` + `kb_dossier`) — not an HTTP round trip to
+ * our own API. Any failure here (an invalid id, the database being unconfigured, a dependency
+ * error, ...) is swallowed and simply omits the script tag; Universe's own client-side fetch
+ * still renders the page and its own error UI regardless, so this enrichment is additive and
+ * never blocks the page.
  */
 async function loadClaimReviews(versionId: string): Promise<ClaimReviewJsonLd[] | null> {
  try {
@@ -46,6 +46,7 @@ export default async function VersionPage({params}: {params: Promise<{versionId:
  return <>
   {claimReviews && claimReviews.length > 0 &&
    <script type="application/ld+json" dangerouslySetInnerHTML={{__html: claimReviewScript(claimReviews)}}/>}
-  <VersionReader kind="version" id={versionId}/>
+  <noscript><a href={`/versions/${encodeURIComponent(versionId)}/raw`}>원문 보기</a></noscript>
+  <Universe initialDoc={versionId}/>
  </>;
 }

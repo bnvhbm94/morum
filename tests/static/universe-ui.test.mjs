@@ -2,15 +2,19 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
-const page = await readFile(new URL('../../src/app/universe/page.tsx', import.meta.url), 'utf8');
+const universePage = await readFile(new URL('../../src/app/universe/page.tsx', import.meta.url), 'utf8');
+const homePage = await readFile(new URL('../../src/app/page.tsx', import.meta.url), 'utf8');
+const versionPage = await readFile(new URL('../../src/app/versions/[versionId]/page.tsx', import.meta.url), 'utf8');
 const source = await readFile(new URL('../../src/components/universe/universe.tsx', import.meta.url), 'utf8');
 const starfield = await readFile(new URL('../../src/components/universe/starfield.ts', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../../src/components/universe/universe.css', import.meta.url), 'utf8');
 const reader = await readFile(new URL('../../src/components/universe/reader.tsx', import.meta.url), 'utf8');
 
-test('the /universe page renders the client explorer', () => {
-  assert.match(page, /<Universe\s*\/>/);
+test('the universe renders at / and stays reachable at the legacy /universe and /versions/:id addresses', () => {
+  assert.match(homePage, /<Universe\s*\/>/);
   assert.match(source, /^'use client';/);
+  assert.match(universePage, /permanentRedirect\(/);
+  assert.match(versionPage, /<Universe initialDoc=\{versionId\}\s*\/>/);
 });
 
 test('universe.tsx is wired to the provided geometry, LOD and data modules', () => {
@@ -64,4 +68,20 @@ test('bodies are told apart by role and a document opens in place, not on anothe
 
 test('grouping comes only from the declared source, never invented similarity placement', () => {
   assert.doesNotMatch(source, /mockDocuments|demoDocuments|similarity|clusterBy/i);
+});
+
+test('/search redirects into the universe with ?q=, and the universe fills and runs it on mount', () => {
+  const searchPage = readFile(new URL('../../src/app/search/page.tsx', import.meta.url), 'utf8');
+  return searchPage.then(text => {
+    assert.match(text, /permanentRedirect\(/);
+    assert.match(text, /\/\?q=\$\{encodeURIComponent\(query\)\}/);
+  }).then(() => {
+    assert.match(source, /initialQuery = params\.get\('q'\)/);
+    assert.match(source, /void runSearch\(initialQuery\)/);
+  });
+});
+
+test('/versions/:id folds the path id in as if it were ?doc=, so the universe opens the same document', () => {
+  assert.match(source, /initialDoc\?:\s*string/);
+  assert.match(source, /params\.set\('doc',\s*initialDoc\)/);
 });

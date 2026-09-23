@@ -1,4 +1,4 @@
-import SpatialExplorer from '../components/spatial-explorer';
+import Universe from '../components/universe/universe';
 export default function Home() {
-  return <SpatialExplorer/>;
+  return <Universe/>;
 }
