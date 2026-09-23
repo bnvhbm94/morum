@@ -26,7 +26,7 @@
 .universe-category[data-open="true"] .universe-category-label { cursor: pointer; pointer-events: none; }
 
 .universe-category-label {
-  position: absolute; top: 50%; left: 50%; translate: -50% -50%; max-width: 34%;
+  position: absolute; top: 50%; left: 50%; translate: -50% calc(-50% + var(--name-dy, 0px)); max-width: 34%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
   color: #f1ecff; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
   font-size: var(--name-size, 1rem); letter-spacing: -.01em; text-align: center;
@@ -42,6 +42,13 @@
 .universe-category:hover .universe-category-label,
 .universe-category[data-selected="true"] .universe-category-label,
 .universe-category:focus-visible .universe-category-label { opacity: .86; }
+/* Far away, a star's name hangs under its cluster in the UI face, shown only where the map has room for it. */
+.universe-category[data-stage="nebula"] .universe-category-label {
+  max-width: none; color: #d6d0e2; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 13px; letter-spacing: 0; transition: opacity 240ms ease;
+}
+.universe-category[data-stage="nebula"][data-named="true"] .universe-category-label { opacity: .72; }
+.universe-category[data-stage="nebula"][data-selected="true"] .universe-category-label, .universe-category[data-stage="nebula"]:hover .universe-category-label { opacity: 1; }
 
 .universe-item-dot {
   position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 6px; height: 6px; border-radius: 50%;
@@ -68,14 +75,14 @@
   color: #f1ecff; text-align: center; transition: opacity 200ms ease;
 }
 .universe-item-title {
-  top: calc(50% + 9px); width: max-content; max-width: var(--label-max, 12rem); overflow: hidden; word-break: keep-all;
+  top: calc(50% + 12px); width: max-content; max-width: var(--label-max, 12rem); overflow: hidden; word-break: keep-all;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
   font-size: var(--label-size, .84rem); line-height: var(--label-line, 18px);
   text-shadow: 0 0 4px #0c0910, 0 0 10px rgb(12 9 16 / .9);
 }
 .universe-item-snippet {
-  top: calc(50% + 13px + var(--label-line, 18px) * var(--label-lines, 1)); width: 14rem; max-width: 60vw; color: #c9c3d6;
+  top: calc(50% + 16px + var(--label-line, 18px) * var(--label-lines, 1)); width: 14rem; max-width: 60vw; color: #c9c3d6;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
   font-size: .74rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   text-shadow: 0 0 4px #0c0910, 0 0 10px rgb(12 9 16 / .9);
@@ -160,6 +167,7 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
   margin: 0; min-height: 1.2em; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; text-align: center;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
 }
+.universe-crumb[data-hint="true"] { color: #5f5b68; }
 .universe-search {
   pointer-events: auto; display: flex; width: 100%; min-height: 3rem; overflow: hidden; border: 0; border-radius: 999px;
   background: rgb(255 255 255 / .05);

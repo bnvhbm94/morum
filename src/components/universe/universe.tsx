@@ -54,6 +54,23 @@ function labelMaxPx(starRadiusPx: number, viewportWidth: number): number {
 }
 const LABEL_PAD_PX = 10;
 const LABEL_GAP_PX = 9;
+/** Screen radius of a planet's drawn dot; labels hang below the dot, not below the (larger) hit circle. */
+const DOT_PX = 3;
+/** A far star shows its name below its cluster once the cluster is this many pixels across. */
+const NAME_FAR_MIN_PX = 5;
+const EDGE_PX = 6;
+/** The search pill and crumb occupy the bottom of the screen; labels stop above them. */
+const CHROME_PX = 120;
+
+/** Below a far star's cluster the name hangs under it; on an open star it sits at the centre. */
+function nameOffsetPx(stage: Stage, radiusPx: number, nameFont: number): number {
+  // The lit cluster is much smaller than the category circle, so the name follows the cluster, not the circle.
+  return stage === 'nebula' ? Math.min(28, Math.max(10, radiusPx * 0.4)) + 6 + nameFont * 0.65 : 0;
+}
+
+function insideViewport(x: number, y: number, width: number, height: number, viewport: Viewport): boolean {
+  return x - width / 2 >= EDGE_PX && x + width / 2 <= viewport.width - EDGE_PX && y - height / 2 >= EDGE_PX && y + height / 2 <= viewport.height - CHROME_PX;
+}
 /** A planet's opening lines appear under its title once its star fills this many screen pixels of radius. */
 const SNIPPET_STAR_PX = 720;
 const SNIPPET_BOX = {width: 224, height: 44};
@@ -232,7 +249,12 @@ export default function Universe() {
       el.dataset.stage = entry ? stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, stageScale(viewport)) : 'nebula';
       el.dataset.kind = entry?.kind ?? 'empty';
       el.dataset.open = entry && entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport)) ? 'true' : 'false';
-      if (entry) el.style.setProperty('--name-size', `${nameFontPx(screenRadius(entry.star, camera)).toFixed(2)}px`);
+      el.dataset.named = labelsRef.current.has(`name:${key}`) ? 'true' : 'false';
+      if (entry) {
+        const nameFont = nameFontPx(screenRadius(entry.star, camera));
+        el.style.setProperty('--name-size', `${nameFont.toFixed(2)}px`);
+        el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
+      }
     }
   }
 
@@ -314,10 +336,17 @@ export default function Universe() {
         if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, (stage === 'nebula' ? 0.85 : 0.35) * dim);
         catNodes.push({id, radiusPx});
         // The name at the centre takes its place before any planet label.
-        if (stage !== 'nebula' || selectedKeyRef.current === id) {
+        // Far away the name hangs under the cluster and competes with its neighbours like any map label.
+        const far = stage === 'nebula';
+        if (!far || selectedKeyRef.current === id || radiusPx >= NAME_FAR_MIN_PX * k) {
           const nameFont = nameFontPx(starRadiusPx);
           const namePos = worldToScreen(camera, viewport, entry.star);
-          boxes.push({id: `name:${id}`, x: namePos.x, y: namePos.y, width: Math.min(estimateLabelWidth(entry.category.label, nameFont), starRadiusPx * 0.68), height: nameFont * 1.3, priority: 2e6});
+          const nameY = namePos.y + nameOffsetPx(stage, radiusPx, nameFont);
+          const nameWidth = far ? estimateLabelWidth(entry.category.label, nameFont) : Math.min(estimateLabelWidth(entry.category.label, nameFont), starRadiusPx * 0.68);
+          const nameHeight = nameFont * 1.3;
+          if (!far || insideViewport(namePos.x, nameY, nameWidth, nameHeight, viewport)) {
+            boxes.push({id: `name:${id}`, x: namePos.x, y: nameY, width: nameWidth, height: nameHeight, priority: far ? 1e6 + entry.category.mass : 2e6});
+          }
         }
       }
       if (open) {
@@ -326,6 +355,15 @@ export default function Universe() {
         const snippetsOn = starRadiusPx >= SNIPPET_STAR_PX;
         const font = labelFontPx(starRadiusPx);
         const lineHeight = Math.round(font * 1.35);
+        // Every drawn dot is an obstacle: a title never lands on another planet.
+        const dots: {itemId: string; x: number; y: number}[] = [];
+        for (const [itemId, entryItem] of items) {
+          if (!isVisible(entryItem.circle, camera, viewport)) continue;
+          const p = worldToScreen(camera, viewport, entryItem.circle);
+          dots.push({itemId, x: p.x, y: p.y});
+        }
+        const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
+          !dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
         for (const [itemId, entryItem] of items) {
           if (!isVisible(entryItem.circle, camera, viewport)) continue;
           const key = itemKey(id, itemId);
@@ -342,10 +380,14 @@ export default function Universe() {
           const lines = fullWidth > maxWidth ? 2 : 1;
           const width = Math.min(fullWidth, maxWidth);
           const height = lineHeight * lines;
-          const titleY = pos.y + r + LABEL_GAP_PX + height / 2;
+          const titleY = pos.y + DOT_PX + LABEL_GAP_PX + height / 2;
+          // A title that would be cut by the screen edge or sit on another planet stays hidden until the view moves.
+          if (!selected && (!insideViewport(pos.x, titleY, width, height, viewport) || !clearOfDots(itemId, pos.x, titleY, width, height))) continue;
           boxes.push({id: key, x: pos.x, y: titleY, width, height, priority});
           if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
-            boxes.push({id: `${key}#s`, x: pos.x, y: titleY + height / 2 + 4 + SNIPPET_BOX.height / 2, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
+            const snippetY = titleY + height / 2 + 4 + SNIPPET_BOX.height / 2;
+            if (insideViewport(pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport) && clearOfDots(itemId, pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
+              boxes.push({id: `${key}#s`, x: pos.x, y: snippetY, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
           }
         }
       }
@@ -608,6 +650,8 @@ export default function Universe() {
     readerRef.current = target;
     setReader(target);
     relatedRef.current = new Map();
+    // A double tap that opened the document must not leave the article text selected.
+    window.getSelection()?.removeAllRanges();
     if (push) { updateUrl(target.categoryId, target, true); readerPushesRef.current += 1; }
     else updateUrl(target.categoryId, target);
     if (camera) glideTo(camera, undefined);
@@ -1050,7 +1094,7 @@ export default function Universe() {
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
       <div className="universe-chrome" data-hidden={reader !== null}>
-        <p className="universe-crumb" aria-live="polite">{notFound ? '찾지 못했다' : crumbText}</p>
+        <p className="universe-crumb" aria-live="polite" data-hint={!notFound && !crumbText}>{notFound ? '찾지 못했다' : crumbText || '항성을 두 번 눌러 들어가고, 행성을 두 번 눌러 읽습니다'}</p>
         <div className="universe-search" data-hidden={dockHidden}>
           <label className="universe-sr-only" htmlFor="universe-query">우주 검색</label>
           <input id="universe-query" ref={searchInputRef} value={query} autoComplete="off" placeholder="검색"
