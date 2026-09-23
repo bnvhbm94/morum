@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 import {
   rootCircle,
   packChildren,
+  placeOrbits,
+  HOLE_KEY,
+  ORBIT_INNER,
+  ORBIT_OUTER,
   ROOT_RADIUS,
   FILL,
   PAD,
 } from '../../src/components/universe/layout.ts';
+import {bodyKind, starCircle} from '../../src/components/universe/celestial.ts';
+import {estimateLabelWidth, resolveLabels} from '../../src/components/universe/labels.ts';
 import {
   worldToScreen,
   screenToWorld,
@@ -26,6 +32,7 @@ import {
   stageScale,
   directionalNode,
   isVisible,
+  itemsOpen,
   pickFetchTargets,
 } from '../../src/components/universe/lod.ts';
 
@@ -386,4 +393,88 @@ test('arrow keys pick the nearest node in that direction', () => {
   assert.equal(directionalNode(nodes, nodes[0], 'ArrowRight').key, 'r');
   assert.equal(directionalNode(nodes, nodes[0], 'ArrowDown').key, 'd');
   assert.equal(directionalNode(nodes, nodes[0], 'ArrowLeft'), null);
+});
+
+test('a named centre child takes the middle whatever its mass', () => {
+  const parent = {x: 0, y: 0, r: 1000};
+  const children = [{id: 'big', mass: 40}, {id: 'guide', mass: 6}, {id: 'mid', mass: 12}];
+  const plain = packChildren(parent, children, 0);
+  const centred = packChildren(parent, children, 0, 'guide');
+  assert.deepEqual([plain.get('big').x, plain.get('big').y], [0, 0]);
+  assert.deepEqual([centred.get('guide').x, centred.get('guide').y], [0, 0]);
+  assert.equal(packChildren(parent, children, 0, 'missing').get('big').x, 0);
+});
+
+test('a reserved centre stays empty and children still fit inside', () => {
+  const parent = {x: 0, y: 0, r: 1000};
+  const children = Array.from({length: 9}, (_, i) => ({id: `d${i}`, mass: 1}));
+  const placed = packChildren(parent, children, 7, undefined, 1.9);
+  const one = placed.get('d0');
+  const holeRadius = 1.9 * one.r; // raw radius 1 maps to one.r
+  assert.ok(Math.abs(placed.get(HOLE_KEY).r - holeRadius) < 1e-6, 'the reserved centre is reported in world units');
+  for (const [id, circle] of placed) {
+    if (id === HOLE_KEY) continue;
+    assert.ok(Math.hypot(circle.x, circle.y) >= holeRadius + circle.r - 1e-6, 'child overlaps the reserved centre');
+    assert.ok(Math.hypot(circle.x, circle.y) + circle.r <= parent.r * FILL + 1e-6, 'child outside the parent');
+  }
+  const single = packChildren(parent, [{id: 'only', mass: 1}], 0, undefined, 1.9).get('only');
+  assert.ok(Math.hypot(single.x, single.y) > 0, 'a single child moves off the centre when it is reserved');
+});
+
+test('planets orbit a star: none inside the name, none outside, none overlapping, same input same place', () => {
+  const star = {x: 100, y: -50, r: 400};
+  for (const n of [1, 3, 7, 24, 120]) {
+    const ids = Array.from({length: n}, (_, i) => `p${i}`);
+    const placed = placeOrbits(star, ids, 11);
+    assert.equal(placed.size, n);
+    const circles = [...placed.values()];
+    for (const c of circles) {
+      const d = Math.hypot(c.x - star.x, c.y - star.y);
+      assert.ok(d - c.r >= star.r * ORBIT_INNER - 1e-6, `planet inside the reserved centre (n=${n})`);
+      assert.ok(d + c.r <= star.r * ORBIT_OUTER + 1e-6, `planet outside the star (n=${n})`);
+    }
+    for (let i = 0; i < circles.length; i++) for (let j = i + 1; j < circles.length; j++) {
+      assert.ok(Math.hypot(circles[i].x - circles[j].x, circles[i].y - circles[j].y) >= circles[i].r + circles[j].r - 1e-6, `planets overlap (n=${n})`);
+    }
+    const again = placeOrbits(star, [...ids].reverse(), 11);
+    for (const [id, c] of placed) assert.deepEqual(again.get(id), c, 'order of ids must not change the layout');
+  }
+  const a = placeOrbits(star, ['x', 'y', 'z'], 1), b = placeOrbits(star, ['x', 'y', 'z'], 2);
+  assert.notDeepEqual(a.get('x'), b.get('x'), 'the seed rotates the orbits');
+});
+
+test('body kind follows role, not depth', () => {
+  assert.equal(bodyKind({childCount: 3, directCount: 0}), 'galaxy');
+  assert.equal(bodyKind({childCount: 0, directCount: 8}), 'star');
+  assert.equal(bodyKind({childCount: 2, directCount: 5}), 'galaxy-star');
+  assert.equal(bodyKind({childCount: 0, directCount: 0}), 'empty');
+  const circle = {x: 0, y: 0, r: 500};
+  assert.deepEqual(starCircle({childCount: 0, directCount: 8}, circle, 60), circle);
+  assert.deepEqual(starCircle({childCount: 2, directCount: 5}, circle, 60), {x: 0, y: 0, r: 60});
+});
+
+test('items open once the star they orbit is open on screen, even inside a galaxy', () => {
+  assert.equal(itemsOpen(159), false);
+  assert.equal(itemsOpen(160), true);
+  assert.equal(itemsOpen(90, 0.5), true);
+  const camera = {x: 0, y: 0, scale: 1}, viewport = {width: 1400, height: 900};
+  const galaxyStar = {id: 'g', circle: {x: 0, y: 0, r: 700}, starCircle: {x: 0, y: 0, r: 100}, childCount: 3, directCount: 4};
+  assert.deepEqual(pickFetchTargets([galaxyStar], camera, viewport, new Set(), new Set()).items, [], 'the centre star is still too small');
+  const closer = {...galaxyStar, starCircle: {x: 0, y: 0, r: 200}};
+  assert.deepEqual(pickFetchTargets([closer], camera, viewport, new Set(), new Set()).items, ['g']);
+  assert.deepEqual(pickFetchTargets([closer], camera, viewport, new Set(), new Set()).children, ['g']);
+});
+
+test('labels: overlapping boxes keep the higher priority, zooming apart shows both', () => {
+  assert.ok(estimateLabelWidth('한글', 10) > estimateLabelWidth('ab', 10));
+  const close = [
+    {id: 'a', x: 0, y: 0, width: 100, height: 18, priority: 1},
+    {id: 'b', x: 40, y: 4, width: 100, height: 18, priority: 5},
+    {id: 'c', x: 300, y: 0, width: 60, height: 18, priority: 0},
+  ];
+  assert.deepEqual([...resolveLabels(close)].sort(), ['b', 'c']);
+  const apart = close.map(box => ({...box, x: box.x * 4}));
+  assert.deepEqual([...resolveLabels(apart)].sort(), ['a', 'b', 'c']);
+  const tie = [{id: 'z', x: 0, y: 0, width: 50, height: 18, priority: 1}, {id: 'y', x: 10, y: 0, width: 50, height: 18, priority: 1}];
+  assert.deepEqual([...resolveLabels(tie)], ['y'], 'ties resolve by id so the result is stable');
 });

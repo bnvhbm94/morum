@@ -31,7 +31,7 @@ export function makeStarfield(count = 220, seed = 1337): Star[] {
   return stars;
 }
 
-export function paintStarfield(ctx: CanvasRenderingContext2D, stars: Star[], camera: Camera, viewport: Viewport): void {
+export function paintStarfield(ctx: CanvasRenderingContext2D, stars: Star[], camera: Camera, viewport: Viewport, dim = 1): void {
   if (viewport.width <= 0 || viewport.height <= 0) return;
   const offsetX = wrap(camera.x * camera.scale * 0.02, viewport.width);
   const offsetY = wrap(camera.y * camera.scale * 0.02, viewport.height);
@@ -39,7 +39,7 @@ export function paintStarfield(ctx: CanvasRenderingContext2D, stars: Star[], cam
   for (const star of stars) {
     const x = wrap(star.x * viewport.width - offsetX, viewport.width);
     const y = wrap(star.y * viewport.height - offsetY, viewport.height);
-    ctx.globalAlpha = star.alpha;
+    ctx.globalAlpha = star.alpha * dim;
     ctx.beginPath();
     ctx.arc(x, y, star.size, 0, Math.PI * 2);
     ctx.fill();
@@ -63,24 +63,37 @@ export function categoryParticleCount(mass: number): number {
 }
 
 /** Deterministic particle field from the category's own layoutSeed, biased toward the centre (density falls toward the rim). World-space, so it only needs generating once per category. */
-export function makeCategoryParticles(circle: Circle, seed: number, mass: number): Particle[] {
+/** A galaxy's particles spread across its circle; a star's gather toward its light, so the two read differently from afar. */
+export function makeCategoryParticles(circle: Circle, seed: number, mass: number, concentration = 1.6): Particle[] {
   const rand = mulberry32(seed);
   const count = categoryParticleCount(mass);
   const points: Particle[] = [];
   for (let i = 0; i < count; i += 1) {
     const angle = rand() * Math.PI * 2;
-    const radius = circle.r * Math.pow(rand(), 1.6);
+    const radius = circle.r * Math.pow(rand(), concentration);
     points.push({x: circle.x + Math.cos(angle) * radius, y: circle.y + Math.sin(angle) * radius, size: 0.6 + rand() * 1.0});
   }
   return points;
 }
 
 /** Nebula/open/items particles: warm white, fading per `alpha` (1 for nebula; scaled down as the circle opens up). */
-export function drawCategoryParticles(ctx: CanvasRenderingContext2D, points: Particle[], camera: Camera, viewport: Viewport, alpha: number): void {
+/** Particles inside `quiet` are dimmed, not removed, down to this share of `alpha` at its centre. */
+const QUIET_FLOOR = 0.12;
+
+/**
+ * `quiet`, when given, is a world-space circle where an opened category's name sits. Stars there fade toward
+ * QUIET_FLOOR with a smooth falloff to the rim, the way sky charts dim stars under a constellation name.
+ */
+export function drawCategoryParticles(ctx: CanvasRenderingContext2D, points: Particle[], camera: Camera, viewport: Viewport, alpha: number, quiet?: Circle): void {
   if (alpha <= 0) return;
   ctx.fillStyle = '#f1ecff';
-  ctx.globalAlpha = alpha;
   for (const point of points) {
+    let share = 1;
+    if (quiet) {
+      const t = Math.hypot(point.x - quiet.x, point.y - quiet.y) / quiet.r;
+      if (t < 1) share = QUIET_FLOOR + (1 - QUIET_FLOOR) * t * t * (3 - 2 * t);
+    }
+    ctx.globalAlpha = alpha * share;
     const screen = worldToScreen(camera, viewport, point);
     if (screen.x < -20 || screen.x > viewport.width + 20 || screen.y < -20 || screen.y > viewport.height + 20) continue;
     ctx.beginPath();
@@ -99,5 +112,18 @@ export function drawCategoryGlow(ctx: CanvasRenderingContext2D, screenPos: {x: n
   ctx.fillStyle = gradient;
   ctx.beginPath();
   ctx.arc(screenPos.x, screenPos.y, radiusPx, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** The light of a star: a warm core that stays small on screen so planets and the name read over it. */
+export function drawStarCore(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, starRadiusPx: number, alpha: number): void {
+  const radius = Math.max(2.5, Math.min(48, starRadiusPx * 0.09));
+  const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radius);
+  gradient.addColorStop(0, `rgba(255,248,236,${(0.95 * alpha).toFixed(3)})`);
+  gradient.addColorStop(0.35, `rgba(255,240,220,${(0.35 * alpha).toFixed(3)})`);
+  gradient.addColorStop(1, 'rgba(255,236,210,0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.fill();
 }

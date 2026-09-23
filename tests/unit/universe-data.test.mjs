@@ -1,6 +1,6 @@
 import {test, describe} from 'node:test';
 import {strict as assert} from 'node:assert';
-import {createTopicSource, topicLayoutSeed} from '../../src/lib/universe-data.ts';
+import {createTopicSource, createTreeSource, topicLayoutSeed} from '../../src/lib/universe-data.ts';
 
 describe('universe-data', () => {
   describe('topicLayoutSeed', () => {
@@ -40,6 +40,7 @@ describe('universe-data', () => {
         topic: 'Test Topic',
         untitled: false,
         duplicateOf: null,
+        role: null,
         ...overrides,
       };
     }
@@ -189,6 +190,65 @@ describe('universe-data', () => {
       const seed1 = categories[0].layoutSeed;
       const seed2 = categories[1].layoutSeed;
       assert.notEqual(seed1, seed2);
+    });
+  });
+
+  describe('star description documents', () => {
+    const makeNode = (overrides = {}) => ({key: 'version:123', target: {kind: 'version', id: 'v1'}, locator: null, locators: [], title: 'Test Title', snippet: 'Test snippet', href: '/test', isCurrent: true, versionState: 'current', score: null, syntheticDemo: false, topic: 'Test Topic', untitled: false, duplicateOf: null, role: null, ...overrides});
+    const nodes = [
+      makeNode({key: 'v:star', topic: 'Alpha', role: 'star', title: 'Alpha', target: {kind: 'version', id: 'star-1'}}),
+      makeNode({key: 'v:1', topic: 'Alpha', target: {kind: 'version', id: '1'}}),
+      makeNode({key: 'v:2', topic: 'Alpha', target: {kind: 'version', id: '2'}}),
+      makeNode({key: 'v:3', topic: 'Beta', target: {kind: 'version', id: '3'}}),
+    ];
+    const source = () => createTopicSource(async () => ({nodes, page: {}, hasMore: false}));
+
+    test('the star document is not a planet and does not count as one', async () => {
+      const [alpha] = await source().children(null);
+      assert.equal(alpha.label, 'Alpha');
+      assert.equal(alpha.directCount, 2);
+      assert.equal(alpha.mass, 2);
+      const items = await source().items('topic:Alpha');
+      assert.deepEqual(items.map(item => item.id), ['v:1', 'v:2']);
+    });
+
+    test('star() returns the description or null when none is written', async () => {
+      const star = await source().star('topic:Alpha');
+      assert.equal(star?.versionId, 'star-1');
+      assert.equal(star?.node.role, 'star');
+      assert.equal(await source().star('topic:Beta'), null);
+      assert.equal(await source().star('topic:Nope'), null);
+    });
+  });
+
+  describe('createTreeSource (layered categories for tests)', () => {
+    const tree = createTreeSource([
+      {id: 'science', label: '과학', children: [
+        {id: 'climate', label: '기후', items: [{id: 'c1', title: '해수면'}, {id: 'c2', title: '온실'}, {id: 'cs', title: '기후', star: true}]},
+        {id: 'sleep', label: '수면', items: [{id: 's1', title: '렘'}]},
+      ]},
+      {id: 'morum', label: 'Morum', items: [{id: 'm1', title: '안내'}], children: [{id: 'api', label: 'API', items: [{id: 'a1', title: '검색'}]}]},
+    ]);
+
+    test('roots are galaxies or stars by role; mass sums the documents below', async () => {
+      const roots = await tree.children(null);
+      const science = roots.find(c => c.id === 'science');
+      assert.equal(science.childCount, 2);
+      assert.equal(science.directCount, 0);
+      assert.equal(science.mass, 3);
+      const morum = roots.find(c => c.id === 'morum');
+      assert.equal(morum.childCount, 1);
+      assert.equal(morum.directCount, 1);
+    });
+
+    test('children, items, star and path work at every layer', async () => {
+      assert.deepEqual((await tree.children('science')).map(c => c.id), ['climate', 'sleep']);
+      assert.deepEqual((await tree.items('climate')).map(i => i.versionId), ['c1', 'c2']);
+      assert.equal((await tree.star('climate'))?.versionId, 'cs');
+      assert.equal(await tree.star('sleep'), null);
+      assert.deepEqual(await tree.pathTo('c2'), ['science', 'climate']);
+      assert.deepEqual(await tree.pathTo('a1'), ['morum', 'api']);
+      assert.deepEqual(await tree.pathTo('zzz'), []);
     });
   });
 });

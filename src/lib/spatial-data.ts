@@ -40,6 +40,8 @@ export type SpatialNode = {
   untitled: boolean;
   /** Record id this record was marked a duplicate of (attributes.duplicate_of); such records are hidden from the galaxies. */
   duplicateOf: string | null;
+  /** attributes.role: "star" marks the description document of its topic; it is shown on the star, not as a planet. */
+  role: 'star' | null;
 };
 
 export type SpatialPage = {
@@ -103,6 +105,7 @@ function makeNode(input: {
   locators?: UnitLocator[];
   topic?: string | null;
   duplicateOf?: string | null;
+  role?: string | null;
 }): SpatialNode {
   const target = input.target;
   const snippet = input.snippet?.trim() || '';
@@ -121,6 +124,7 @@ function makeNode(input: {
     topic: input.topic?.trim() || null,
     untitled: !input.title?.trim(),
     duplicateOf: input.duplicateOf?.trim() || null,
+    role: input.role === 'star' ? 'star' : null,
   };
 }
 
@@ -135,6 +139,7 @@ export function recordsToSpatialPage(data: Paged<RecordSummary>): SpatialPage {
       syntheticDemo: record.current.synthetic_demo,
       topic: typeof record.current.attributes?.topic === 'string' ? record.current.attributes.topic : null,
       duplicateOf: typeof record.current.attributes?.duplicate_of === 'string' ? record.current.attributes.duplicate_of : null,
+      role: typeof record.current.attributes?.role === 'string' ? record.current.attributes.role : null,
     })),
     page: data.page,
     hasMore: Boolean(data.page.next_cursor || data.page.truncated),

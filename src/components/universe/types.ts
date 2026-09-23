@@ -33,8 +33,10 @@ export type UniverseItem = {
 export interface UniverseSource {
   /** Children of a category, or the roots when `at` is null. */
   children(at: string | null, signal?: AbortSignal): Promise<UniverseCategory[]>;
-  /** Items classified directly into a category. */
+  /** Items classified directly into a category, without its description document. */
   items(categoryId: string, signal?: AbortSignal): Promise<UniverseItem[]>;
+  /** The category's own description document (attributes.role === "star"), newest first; null when none is written yet. */
+  star(categoryId: string, signal?: AbortSignal): Promise<UniverseItem | null>;
   /** Category ids from a root down to the category holding this version, or [] when it is unclassified or unknown. */
   pathTo(versionId: string, signal?: AbortSignal): Promise<string[]>;
 }

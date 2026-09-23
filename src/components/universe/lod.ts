@@ -46,7 +46,14 @@ export type FetchCandidate = {
   circle: Circle;
   childCount: number;
   directCount: number;
+  /** The circle the category's own documents orbit; the category circle itself when absent. */
+  starCircle?: Circle;
 };
+
+/** Documents of a category are fetched and shown once its star (the circle they orbit) opens on screen. */
+export function itemsOpen(starRadiusPx: number, k = 1): boolean {
+  return starRadiusPx >= STAGE_PX.open * k;
+}
 
 export function pickFetchTargets(
   candidates: FetchCandidate[],
@@ -66,7 +73,8 @@ export function pickFetchTargets(
     }
 
     const radiusPx = screenRadius(candidate.circle, camera);
-    const stage = stageFor(radiusPx, candidate.directCount > 0, candidate.childCount > 0, stageScale(viewport));
+    const k = stageScale(viewport);
+    const stage = stageFor(radiusPx, candidate.directCount > 0, candidate.childCount > 0, k);
 
     // Collect children
     if ((stage === 'open' || stage === 'items') && candidate.childCount > 0) {
@@ -75,10 +83,11 @@ export function pickFetchTargets(
       }
     }
 
-    // Collect items
-    if (stage === 'items') {
+    // Collect items: a star's documents load when the star itself is open, whether or not it sits inside a galaxy.
+    const starRadiusPx = screenRadius(candidate.starCircle ?? candidate.circle, camera);
+    if (candidate.directCount > 0 && itemsOpen(starRadiusPx, k)) {
       if (!loadedItems.has(candidate.id)) {
-        items.push({id: candidate.id, radiusPx});
+        items.push({id: candidate.id, radiusPx: starRadiusPx});
       }
     }
   }

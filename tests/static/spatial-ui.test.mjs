@@ -6,6 +6,8 @@ const source = await readFile(new URL('../../src/components/spatial-explorer.tsx
 const data = await readFile(new URL('../../src/lib/spatial-data.ts', import.meta.url), 'utf8');
 const page = await readFile(new URL('../../src/app/page.tsx', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../../src/app/globals.css', import.meta.url), 'utf8');
+const citedBody = await readFile(new URL('../../src/components/cited-body.tsx', import.meta.url), 'utf8');
+const reading = await readFile(new URL('../../src/components/reading.ts', import.meta.url), 'utf8');
 
 test('home mounts the real-data galaxy explorer without a mock document collection', () => {
   assert.match(page, /<SpatialExplorer\s*\/>/);
@@ -64,7 +66,10 @@ test('the planet keeps explicit relation semantics, satellites and full context 
   assert.match(styles, /\.spatial-planet[^}]*overflow-y:\s*auto/s);
   assert.match(data, /export async function loadSpatialCitations\(/);
   assert.match(data, /anchorMatches/);
-  assert.match(source, /className="spatial-cite"/);
+  assert.match(citedBody, /className=\{className\}/);
+  assert.match(source, /renderCitedBody\(/);
+  assert.match(reading, /export function stepReadingParagraph\(/);
+  assert.match(source, /stepReadingParagraph\(/);
   assert.match(source, /인용문 없음/);
   assert.match(source, /문서 전체/);
 });

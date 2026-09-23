@@ -22,6 +22,8 @@ import {
   type SpatialPage,
 } from '../lib/spatial-data';
 import {errorMessage} from '../lib/api-client';
+import {clearReadingHighlight, pageReading, spatialReadingParts, stepReadingParagraph} from './reading';
+import {citeMark, renderCitedBody} from './cited-body';
 import type {ContentRef, Relation, ReviewSummary, Version, VersionView} from '../contracts/types';
 
 const CELL_X = 430;
@@ -124,6 +126,7 @@ function synthesizeVersionNode(id: string): SpatialNode {
     topic: null,
     untitled: true,
     duplicateOf: null,
+    role: null,
   };
 }
 
@@ -158,6 +161,8 @@ export default function SpatialExplorer() {
   const [nearError, setNearError] = useState('');
   const [pageGeneration, setPageGeneration] = useState(0);
   const reducedMotion = useRef(false);
+  const paragraphRef = useRef(-1);
+  useEffect(() => { paragraphRef.current = -1; clearReadingHighlight(); }, [near]);
 
   activeQueryRef.current = activeQuery;
   const homePageRef = useRef<SpatialPage | null>(null), searchPageRef = useRef<SpatialPage | null>(null);
@@ -443,8 +448,18 @@ export default function SpatialExplorer() {
       if (composing || event.isComposing || target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (event.key === 'Enter') { event.preventDefault(); goIn(selectedRef.current); return; }
       if (event.key === 'Escape' || event.key === 'Backspace') { event.preventDefault(); goOut(true); return; }
+      if ((event.key === ' ' || event.key === 'PageDown' || event.key === 'PageUp') && itemsRef.current[selectedRef.current]?.kind === 'planet') {
+        const article = document.querySelector<HTMLElement>('.spatial-planet');
+        if (article) { event.preventDefault(); pageReading(article, event.key === 'PageUp' || (event.key === ' ' && event.shiftKey) ? -1 : 1, !reducedMotion.current); markActive(); return; }
+      }
       if (!event.key.startsWith('Arrow')) return;
-      const current = itemsRef.current[selectedRef.current], next = current && directionalNode(itemsRef.current, current, event.key);
+      const current = itemsRef.current[selectedRef.current];
+      if (current?.kind === 'planet' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        const article = document.querySelector<HTMLElement>('.spatial-planet');
+        const parts = article && spatialReadingParts(article);
+        if (parts) { event.preventDefault(); paragraphRef.current = stepReadingParagraph(parts, paragraphRef.current, event.key === 'ArrowDown' ? 1 : -1, !reducedMotion.current); markActive(); return; }
+      }
+      const next = current && directionalNode(itemsRef.current, current, event.key);
       if (next) { event.preventDefault(); const index = itemsRef.current.indexOf(next); setSelected(index); selectedRef.current = index; center(index); markActive(); lastTapRef.current = null; }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
@@ -511,6 +526,7 @@ function nodeFromVersionView(view: VersionView): SpatialNode {
     topic: null,
     untitled: !view.version.title?.trim(),
     duplicateOf: typeof view.version.attributes?.duplicate_of === 'string' ? view.version.attributes.duplicate_of : null,
+    role: view.version.attributes?.role === 'star' ? 'star' : null,
   };
 }
 
@@ -534,6 +550,7 @@ function buildSatellites(near: NearState, planetNode: SpatialNode): SatelliteIte
       topic: null,
       untitled: !version.title?.trim(),
       duplicateOf: null,
+      role: null,
     }}));
 
   const basisItems: Satellite[] = near.citations.map(citation => ({
@@ -623,7 +640,9 @@ function renderItem(item: Item, index: number, selected: number, near: NearState
     if (!near) return null;
     const titleId = 'spatial-planet-title';
     return <article key={item.key} className="spatial-planet" data-item-index={index} data-selectable data-cite={activeCite ?? undefined} style={{'--grid-x': 0, '--grid-y': 0} as CSSProperties} aria-labelledby={titleId}>
-      <h2 className="sr-only" id={titleId}>{item.node.untitled ? '제목 없는 기록' : (near.view.version.title || '제목 없는 기록')}</h2>
+      {near.view.version.title
+        ? <h2 className="spatial-planet-title" id={titleId}>{near.view.version.title}</h2>
+        : <h2 className="sr-only" id={titleId}>제목 없는 기록</h2>}
       <div className="spatial-planet-text">{renderCitedBody(near.view.version.body_text, near.citations)}</div>
       <nav className="spatial-planet-links" aria-label="문서 상세">
         <a href={`/versions/${encodeURIComponent(near.view.version.id)}`}>고정 링크와 전체 맥락</a>
@@ -660,26 +679,4 @@ function renderSatelliteContent(satellite: Satellite): ReactNode {
   return <>첨부된 근거 없음</>;
 }
 
-function citeMark(index: number): string {
-  const digits = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-  return String(index).split('').map(d => digits[Number(d)]).join('');
-}
 
-/** Body text with each anchored, still-matching citation wrapped in a mark carrying its number. Offsets are Unicode code points, as the API records them. */
-function renderCitedBody(body: string, citations: Citation[]): ReactNode {
-  const points = Array.from(body);
-  const spans = citations
-    .filter(citation => citation.anchor && citation.anchorMatches)
-    .map(citation => ({start: citation.anchor!.selector.start, end: citation.anchor!.selector.end, index: citation.index}))
-    .sort((a, b) => a.start - b.start || a.end - b.end);
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start < cursor) continue; // overlapping spans: keep the earlier one, the satellite still lists the citation
-    if (span.start > cursor) parts.push(points.slice(cursor, span.start).join(''));
-    parts.push(<mark key={`cite-${span.index}`} className="spatial-cite" data-n={span.index}>{points.slice(span.start, span.end).join('')}<sup>{span.index}</sup></mark>);
-    cursor = span.end;
-  }
-  if (cursor < points.length) parts.push(points.slice(cursor).join(''));
-  return parts;
-}
