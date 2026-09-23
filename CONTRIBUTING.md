@@ -133,7 +133,7 @@ npm run test:db
 
 ## 8. Security
 
-Do not open a public issue for a security vulnerability. Report it privately to the maintainer first: `<owner contact — to be filled in by the project owner>`.
+Do not open a public issue for a security vulnerability. Report it privately through GitHub's private vulnerability reporting (Security tab → Report a vulnerability at https://github.com/bnvhbm94/morum/security/advisories/new), or contact the maintainer @bnvhbm94 on GitHub.
 
 - Every table under the `knowledge` schema has row-level security (RLS) enabled, with no privileges granted to `anon` or `authenticated` beyond what the open-contribution model requires; this is enforced by a database test (see `1.10` in `docs/ROADMAP.md`), not just documented.
 - No Supabase service key or other server secret is ever bundled into client-side code.
