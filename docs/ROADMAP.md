@@ -73,15 +73,15 @@
 
 | # | 항목 | 완료 기준 | 방식 | 결정 |
 |---|---|---|---|---|
-| 2.1 | 인용문 선택자 | anchor와 부분 수정에서 `{exact, prefix, suffix}`(W3C TextQuoteSelector)를 1차로, 위치는 힌트로; 서버가 유일 위치를 찾고, 여러 곳이면 `AMBIGUOUS_SELECTOR`+후보, 없으면 `SELECTOR_NOT_FOUND`(잘못된 자리에 조용히 붙이지 않음); 기존 위치 방식 유지 | Sonnet(SQL+TS), 0112 | push(소유자) |
+| 2.1 ✅(push 대기) | 인용문 선택자 | anchor와 부분 수정에서 `{exact, prefix, suffix}`(W3C TextQuoteSelector)를 1차로, 위치는 힌트로; 서버가 유일 위치를 찾고, 여러 곳이면 `AMBIGUOUS_SELECTOR`+후보, 없으면 `SELECTOR_NOT_FOUND`(잘못된 자리에 조용히 붙이지 않음); 기존 위치 방식 유지 | Sonnet(SQL+TS), 0112 | push(소유자) |
 | 2.2 | 묶음 쓰기 | `POST /bundles`: 출처·기록·근거·앵커·관계·분류를 한 트랜잭션·한 멱등 키로, `$ref` 로컬 참조, `on_duplicate: return_existing`, `dry_run`; 멱등 키 의미는 IETF 초안대로(진행 중 충돌 409, 같은 키 다른 본문 422/`IDEMPOTENCY_CONFLICT`); 1.7의 core 함수 재사용 | Sonnet(SQL+TS), 0113 | push(소유자), **D5** |
 | 2.3 | 서버 중복 감지 | 같은 본문 해시 / 같은 (topic,title) / 같은 canonical_url+content 해시 → 기존 id + `meta.warnings`. **감지와 해소를 분리**: 서버는 후보만 표시하고 합치지 않는다(합치기는 `corrects`/`same_meaning_as` 관계로 에이전트가) | 2.2에 포함 | 없음 |
 | 2.4 | contribute v2 | 2.2 사용; 출처에 `submitted_text`(발췌; 전문 아님)·`published_at`·`retrieved_at` 필수, `attributes.archive_url`(Wayback Availability API로 기존 스냅샷을 먼저 찾고 없으면 SPN2로 요청, **에이전트가** 함; 서버는 가져오지 않음), 업로드 직후 `url-report`로 대조가 `found_*`가 아니면 실패로 보고 | Sonnet 1명 | **D11** |
-| 2.5 | 확인 목록 만들기 | (a) URL 200: Wikipedia Perennial sources 표를 씨앗으로 + Semrush·Profound의 AI 인용 상위 도메인 교집합(Wikipedia, Reddit, YouTube, Forbes 등; 월별로 크게 바뀌므로 순위가 아니라 목록으로만); (b) 주장 100: FEVER(CC BY-SA; 주장+위키백과 문장 근거+판정, Morum의 근거·검토 모델과 구조가 같음)에서 표본 + TruthfulQA(Apache-2.0)의 "흔한 오해" 유형 + FreshQA의 변화 속도 분류를 `attributes.change_rate`(never/slow/fast/false_premise)로 | Sonnet 조사 3명, 날조 금지 | 없음 |
+| 2.5 ✅ | 확인 목록 만들기 | (a) URL 200: Wikipedia Perennial sources 표를 씨앗으로 + Semrush·Profound의 AI 인용 상위 도메인 교집합(Wikipedia, Reddit, YouTube, Forbes 등; 월별로 크게 바뀌므로 순위가 아니라 목록으로만); (b) 주장 100: FEVER(CC BY-SA; 주장+위키백과 문장 근거+판정, Morum의 근거·검토 모델과 구조가 같음)에서 표본 + TruthfulQA(Apache-2.0)의 "흔한 오해" 유형 + FreshQA의 변화 속도 분류를 `attributes.change_rate`(never/slow/fast/false_premise)로 | Sonnet 조사 3명, 날조 금지 | 없음 |
 | 2.6 | 첫 확인 시딩 | 2.5의 300건을 2.4로 업로드; URL당 출처(발췌 포함)+인용 근거+`quote_match` 검토 1건; `quote_unverifiable`이 181에서 늘지 않고 `found_*` ≥ 250 | 계획 세션 실행 | 없음 |
 | 2.7 | 기존 181건 채우기 | 본문 없는 출처마다 발췌가 있는 새 출처를 만들고 근거를 새로 달아 대조 가능하게; 옛 출처는 남김 | Sonnet, 2.4 사용 | 없음 |
 | 2.8 | 언어 방침 반영 | 새 기여의 설명·검토는 영어; 항성 설명 문서는 한국어 유지 | 2.6에 포함 | 없음 |
-| 2.9 | 검토를 ClaimReview로 노출(작게) | `/dossier`와 버전 페이지에 schema.org `ClaimReview` JSON-LD를 붙여 검색엔진·팩트체크 집계기가 읽을 수 있게(판정은 Morum의 stance 그대로, 진실 점수 없음) | Sonnet 1명 | 없음 |
+| 2.9 ✅(배포 대기) | 검토를 ClaimReview로 노출(작게) | `/dossier`와 버전 페이지에 schema.org `ClaimReview` JSON-LD를 붙여 검색엔진·팩트체크 집계기가 읽을 수 있게(판정은 Morum의 stance 그대로, 진실 점수 없음) | Sonnet 1명 | 없음 |
 
 의존: 1.7 → 2.2 → 2.4 → 2.6/2.7. 2.1 독립. 2주 끝의 지표: `found_*` ≥ 250, `url-report` 적중 URL ≥ 200, 확인 기록(quote_match/evidence_support 검토) ≥ 300.
 
@@ -211,3 +211,4 @@
 - 2026-09-23 규칙에 '디자인은 성능 높은 모델에게 설계만 요청, 구현은 Sonnet' 추가(소유자 지시). 1.9·4.9 방식 수정.
 - 2026-09-23 (개정 1 이후): 1.2, 1.3, 1.4, 1.10 완료(커밋 b42a51b). 1.10 결과: 실제 스키마에서 위반 없음. CONTRIBUTING.md의 보안 연락처는 소유자가 채워야 함. `next-env.d.ts`는 추적 해제.
 - 2026-09-23 (밤): 1.5 경로 등록표(커밋 90cabf4, 배포 morum-bu1q7u3rv), 1.8 문서 언어(docs/en, docs/ko) 완료. 1.9는 설계안 A(Fable)·B(Opus)가 `docs/design/`에 있고 소유자 선택 대기. 2.1·2.9 구현 지시서 작성(`docs/design/`). 2.5 확인 목록은 `data/verification/`로 진행 중.
+- 2026-09-24 (새벽): 2.1 인용 선택자 구현(마이그레이션 0112, `POST /versions/:id/locate`; 소유자의 `supabase db push --linked` 뒤 배포), 2.9 ClaimReview JSON-LD 구현(같은 배포에 포함), 2.5 확인 목록 `data/verification/`(URL 189, 주장 100). 커밋 a08b91b. 알게 된 것: `kb_dossier`가 동의 검토를 개수로만 내보내고 앵커 본문을 싣지 않아 ClaimReview의 Supported 항목과 앵커 단위 주장은 다음 dossier 확장(마이그레이션)에서.
