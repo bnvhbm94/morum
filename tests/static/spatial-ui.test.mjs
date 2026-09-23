@@ -23,6 +23,8 @@ test('home mounts the real-data galaxy explorer without a mock document collecti
 test('galaxies come from the declared topic attribute and placement from declared relations only', () => {
   assert.match(data, /export function groupGalaxies\(/);
   assert.match(data, /'미분류'/);
+  assert.match(data, /duplicate_of/);
+  assert.match(data, /filter\(node => !node\.duplicateOf\)/);
   assert.match(data, /export function placeGalaxy\(/);
   assert.match(data, /layoutNodes\(members, edges, spiral\)/);
   assert.match(data, /layoutEdges\(relations, /);

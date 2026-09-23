@@ -314,7 +314,11 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 .spatial-cite-where { margin-top: .3rem; color: #6a6a6a; font-size: .68rem; }
 .spatial-planet-links { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; margin-top: 1.4rem; font-size: .7rem; line-height: 1.5; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
 .spatial-planet-links a { color: #7c7c7c; text-decoration-color: rgb(255 255 255 / .25); }
-.spatial-satellite { position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: 16rem; translate: -50% -50%; padding: .5rem .75rem; color: #a3a3a3; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; animation: spatial-node-in 240ms ease both; }
+.spatial-satellites { position: absolute; top: 0; width: 16rem; translate: -50% -50%; display: grid; gap: 1.1rem; }
+.spatial-satellites[data-side="left"] { left: calc(-1.15 * 430px); }
+.spatial-satellites[data-side="right"] { left: calc(1.15 * 430px); }
+.spatial-satellite { position: relative; width: 100%; padding: .5rem .75rem; border-radius: .6rem; cursor: pointer; color: #a3a3a3; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; animation: spatial-node-in 240ms ease both; }
+.spatial-satellite[data-selected="true"] { background: rgb(255 255 255 / .035); color: #d6d6d6; }
 .spatial-satellite b { display: block; margin-bottom: .25rem; color: #6e6e6e; font-weight: 500; font-size: .66rem; letter-spacing: .06em; }
 .spatial-satellite[data-kind="version"] { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: .9rem; color: #8d8d8d; }
 .spatial-satellite[data-kind="empty"] { color: #5c5c5c; }
@@ -336,7 +340,9 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
   .spatial-dock { width: calc(100% - 2rem); }
   .spatial-crumb { white-space: normal; }
   .spatial-galaxy { width: min(310px, 78vw); }
-  .spatial-satellite { width: 12rem; }
+  .spatial-satellites { width: 12rem; }
+  .spatial-satellites[data-side="left"] { left: calc(-1.15 * 300px); }
+  .spatial-satellites[data-side="right"] { left: calc(1.15 * 300px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .spatial-search, .spatial-world { transition: none; animation: none; }

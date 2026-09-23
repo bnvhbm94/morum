@@ -38,6 +38,8 @@ export type SpatialNode = {
   syntheticDemo: boolean;
   topic: string | null;
   untitled: boolean;
+  /** Record id this record was marked a duplicate of (attributes.duplicate_of); such records are hidden from the galaxies. */
+  duplicateOf: string | null;
 };
 
 export type SpatialPage = {
@@ -100,6 +102,7 @@ function makeNode(input: {
   syntheticDemo?: boolean;
   locators?: UnitLocator[];
   topic?: string | null;
+  duplicateOf?: string | null;
 }): SpatialNode {
   const target = input.target;
   const snippet = input.snippet?.trim() || '';
@@ -117,6 +120,7 @@ function makeNode(input: {
     syntheticDemo: input.syntheticDemo ?? false,
     topic: input.topic?.trim() || null,
     untitled: !input.title?.trim(),
+    duplicateOf: input.duplicateOf?.trim() || null,
   };
 }
 
@@ -130,6 +134,7 @@ export function recordsToSpatialPage(data: Paged<RecordSummary>): SpatialPage {
       isCurrent: true,
       syntheticDemo: record.current.synthetic_demo,
       topic: typeof record.current.attributes?.topic === 'string' ? record.current.attributes.topic : null,
+      duplicateOf: typeof record.current.attributes?.duplicate_of === 'string' ? record.current.attributes.duplicate_of : null,
     })),
     page: data.page,
     hasMore: Boolean(data.page.next_cursor || data.page.truncated),
@@ -199,9 +204,24 @@ function writeCached(key: string, value: SearchResponse): void {
   }
 }
 
+/** Home window: up to HOME_PAGES pages of HOME_PAGE_SIZE records, so every galaxy is counted client-side. A server-side topic aggregation should replace this once the repository outgrows the window. */
+export const HOME_PAGE_SIZE = 50;
+export const HOME_PAGES = 4;
+
 export async function loadSpatialHome(signal?: AbortSignal): Promise<SpatialPage> {
-  const data = await apiGet<Paged<RecordSummary>>(`/records?limit=${SPATIAL_LIMIT}`, signal);
-  return recordsToSpatialPage(data);
+  const nodes: SpatialNode[] = [];
+  let cursor: string | null = null;
+  let page: PageInfo = emptyPage();
+  for (let index = 0; index < HOME_PAGES; index += 1) {
+    const query = new URLSearchParams({limit: String(HOME_PAGE_SIZE)});
+    if (cursor) query.set('cursor', cursor);
+    const data: Paged<RecordSummary> = await apiGet<Paged<RecordSummary>>(`/records?${query}`, signal);
+    nodes.push(...recordsToSpatialPage(data).nodes);
+    page = data.page;
+    cursor = data.page.next_cursor;
+    if (!cursor) break;
+  }
+  return {nodes: nodes.filter(node => !node.duplicateOf), page, hasMore: Boolean(cursor || page.truncated)};
 }
 
 export async function loadSpatialSearch(query: string, options: SpatialSearchOptions, signal?: AbortSignal): Promise<SpatialPage & {response: SearchResponse}> {

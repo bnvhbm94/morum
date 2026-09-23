@@ -30,8 +30,10 @@ const DRAG_THRESHOLD = 7;
 const DOUBLE_TAP = 340;
 const MAX_FLICK = 60;
 const SEARCH_DELAY = 1000;
-const WHEEL_IN = -160;
-const WHEEL_OUT = 160;
+const WHEEL_IN = -240;
+const WHEEL_OUT = 240;
+const WHEEL_COOLDOWN = 700;
+const WHEEL_IDLE_RESET = 250;
 const SATELLITE_CAP = 6;
 const SATELLITE_STEP = 0.55;
 
@@ -121,6 +123,7 @@ function synthesizeVersionNode(id: string): SpatialNode {
     syntheticDemo: false,
     topic: null,
     untitled: true,
+    duplicateOf: null,
   };
 }
 
@@ -132,7 +135,7 @@ export default function SpatialExplorer() {
   const lastTapRef = useRef<{index: number; at: number} | null>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRequestRef = useRef<AbortController | null>(null), nearRequestRef = useRef<AbortController | null>(null);
-  const wheelAccumRef = useRef(0);
+  const wheelAccumRef = useRef(0), wheelAtRef = useRef(0), wheelLockUntilRef = useRef(0);
   const ownPushCountRef = useRef(0);
   const activeQueryRef = useRef('');
   const restoredRef = useRef(false);
@@ -196,7 +199,7 @@ export default function SpatialExplorer() {
     let nearest = 0, best = Infinity;
     itemsRef.current.forEach((item, index) => {
       const distance = Math.hypot(cx - (cx + item.x * CELL_X + x), cy - (cy + item.y * CELL_Y + y));
-      const element = worldRef.current?.children[index] as HTMLElement | undefined;
+      const element = worldRef.current?.querySelector<HTMLElement>(`[data-item-index="${index}"]`) ?? undefined;
       element?.style.setProperty('--node-light', String(Math.max(.34, 1 - distance / 920)));
       if (distance < best) { best = distance; nearest = index; }
     });
@@ -416,12 +419,18 @@ export default function SpatialExplorer() {
     const tick = () => { vx *= .92; vy *= .92; cameraRef.current.x += vx; cameraRef.current.y += vy; schedulePaint(); if (Math.hypot(vx, vy) > .35) inertiaRef.current = requestAnimationFrame(tick); else inertiaRef.current = null; };
     inertiaRef.current = requestAnimationFrame(tick);
   };
+  // Wheel = semantic zoom only while browsing galaxies or documents. While reading (near) the wheel
+  // is left to the document's own scrolling: trackpad momentum outside the text must never "go out".
   const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (level.kind === 'near') return;
     if (event.target instanceof HTMLElement && event.target.closest('.spatial-planet')) return;
-    event.preventDefault();
+    const now = performance.now();
+    if (now < wheelLockUntilRef.current) return;
+    if (now - wheelAtRef.current > WHEEL_IDLE_RESET) wheelAccumRef.current = 0;
+    wheelAtRef.current = now;
     wheelAccumRef.current += event.deltaY;
-    if (wheelAccumRef.current <= WHEEL_IN) { wheelAccumRef.current = 0; goIn(selectedRef.current); }
-    else if (wheelAccumRef.current >= WHEEL_OUT) { wheelAccumRef.current = 0; goOut(true); }
+    if (wheelAccumRef.current <= WHEEL_IN) { wheelAccumRef.current = 0; wheelLockUntilRef.current = now + WHEEL_COOLDOWN; goIn(selectedRef.current); }
+    else if (wheelAccumRef.current >= WHEEL_OUT) { wheelAccumRef.current = 0; wheelLockUntilRef.current = now + WHEEL_COOLDOWN; goOut(true); }
   };
 
   useEffect(() => {
@@ -457,13 +466,13 @@ export default function SpatialExplorer() {
     <h1 className="sr-only">Morum 문서 공간</h1>
     <div className="spatial-viewport" ref={viewportRef} tabIndex={-1} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={event => finishPointer(event)} onPointerCancel={event => finishPointer(event, true)} onWheel={onWheel}>
       <div className="spatial-world" ref={worldRef}>
-        {items.map((item, index) => renderItem(item, index, selected, near, nearLoading, nearError, activeCite, {
+        {renderItems(items, selected, near, nearLoading, nearError, activeCite, {
           suppressed: () => suppressClickRef.current,
           onSelect: (i) => { if (i !== selectedRef.current) { setSelected(i); selectedRef.current = i; } center(i); },
           onActivate: (i) => { lastTapRef.current = null; goIn(i); },
           registerTap: (i) => { const now = performance.now(), last = lastTapRef.current; const doubleActivation = last !== null && last.index === i && now - last.at <= DOUBLE_TAP; if (doubleActivation) { lastTapRef.current = null; goIn(i); } else lastTapRef.current = {index: i, at: now}; },
           onRetry: () => { if (level.kind === 'near') navigateTo(level, {replace: true}); },
-        }))}
+        })}
       </div>
     </div>
     <div className="spatial-dock" data-hidden={dockHidden}>
@@ -497,6 +506,7 @@ function nodeFromVersionView(view: VersionView): SpatialNode {
     syntheticDemo: view.version.synthetic_demo,
     topic: null,
     untitled: !view.version.title?.trim(),
+    duplicateOf: typeof view.version.attributes?.duplicate_of === 'string' ? view.version.attributes.duplicate_of : null,
   };
 }
 
@@ -519,6 +529,7 @@ function buildSatellites(near: NearState, planetNode: SpatialNode): SatelliteIte
       syntheticDemo: version.synthetic_demo,
       topic: null,
       untitled: !version.title?.trim(),
+      duplicateOf: null,
     }}));
 
   const basisItems: Satellite[] = near.citations.map(citation => ({
@@ -569,11 +580,26 @@ type ItemHandlers = {
   onRetry: () => void;
 };
 
+/** Satellites are stacked in one column per side so uneven heights never overlap; their item x/y stay only for keyboard direction and lighting. */
+function renderItems(items: Item[], selected: number, near: NearState | null, nearLoading: boolean, nearError: string, activeCite: number | null, handlers: ItemHandlers): ReactNode {
+  const out: ReactNode[] = [];
+  const columns: Record<'left' | 'right', ReactNode[]> = {left: [], right: []};
+  items.forEach((item, index) => {
+    const rendered = renderItem(item, index, selected, near, nearLoading, nearError, activeCite, handlers);
+    if (item.kind === 'satellite') columns[item.x < 0 ? 'left' : 'right'].push(rendered);
+    else out.push(rendered);
+  });
+  (['left', 'right'] as const).forEach(side => {
+    if (columns[side].length) out.push(<div key={`satellites-${side}`} className="spatial-satellites" data-side={side}>{columns[side]}</div>);
+  });
+  return out;
+}
+
 function renderItem(item: Item, index: number, selected: number, near: NearState | null, nearLoading: boolean, nearError: string, activeCite: number | null, handlers: ItemHandlers): ReactNode {
   const style = {'--grid-x': item.x, '--grid-y': item.y} as CSSProperties;
   if (item.kind === 'galaxy') {
     const untagged = item.galaxy.topic === null;
-    return <button key={item.key} type="button" className="spatial-galaxy" data-selected={index === selected} data-untagged={untagged} style={style}
+    return <button key={item.key} type="button" className="spatial-galaxy" data-item-index={index} data-selected={index === selected} data-untagged={untagged} style={style}
       onMouseDown={event => { if (event.detail >= 2) event.preventDefault(); }}
       onClick={event => { if (handlers.suppressed()) return; handlers.onSelect(index); if (event.detail >= 2) handlers.onActivate(index); else handlers.registerTap(index); }}>
       <span className="spatial-galaxy-name">{item.galaxy.label}</span>
@@ -581,7 +607,7 @@ function renderItem(item: Item, index: number, selected: number, near: NearState
     </button>;
   }
   if (item.kind === 'mid') {
-    return <button key={item.key} type="button" className="spatial-node" data-selected={index === selected} data-dim={item.dim} data-foreign={item.foreign} style={style}
+    return <button key={item.key} type="button" className="spatial-node" data-item-index={index} data-selected={index === selected} data-dim={item.dim} data-foreign={item.foreign} style={style}
       onMouseDown={event => { if (event.detail >= 2) event.preventDefault(); }}
       onClick={event => { if (handlers.suppressed()) return; handlers.onSelect(index); if (event.detail >= 2) handlers.onActivate(index); else handlers.registerTap(index); }}>
       <span className="spatial-node-copy">{item.node.snippet || '내용 미리보기가 없습니다.'}</span>
@@ -592,7 +618,7 @@ function renderItem(item: Item, index: number, selected: number, near: NearState
     if (nearError) return <p key={item.key} className="spatial-message" role="alert">{nearError} <button type="button" onClick={handlers.onRetry}>다시 시도</button></p>;
     if (!near) return null;
     const titleId = 'spatial-planet-title';
-    return <article key={item.key} className="spatial-planet" data-selectable data-cite={activeCite ?? undefined} style={{'--grid-x': 0, '--grid-y': 0} as CSSProperties} aria-labelledby={titleId}>
+    return <article key={item.key} className="spatial-planet" data-item-index={index} data-selectable data-cite={activeCite ?? undefined} style={{'--grid-x': 0, '--grid-y': 0} as CSSProperties} aria-labelledby={titleId}>
       <h2 className="sr-only" id={titleId}>{item.node.untitled ? '제목 없는 기록' : (near.view.version.title || '제목 없는 기록')}</h2>
       <div className="spatial-planet-text">{renderCitedBody(near.view.version.body_text, near.citations)}</div>
       <nav className="spatial-planet-links" aria-label="문서 상세">
@@ -602,7 +628,7 @@ function renderItem(item: Item, index: number, selected: number, near: NearState
       </nav>
     </article>;
   }
-  return <div key={item.key} className="spatial-satellite" data-kind={item.satellite.kind} style={style} onClick={event => { if (handlers.suppressed()) return; handlers.onSelect(index); if (!(event.target instanceof HTMLElement && event.target.closest('a'))) handlers.onActivate(index); }}>
+  return <div key={item.key} className="spatial-satellite" data-item-index={index} data-selected={index === selected} data-kind={item.satellite.kind} onClick={event => { if (handlers.suppressed()) return; handlers.onSelect(index); if (!(event.target instanceof HTMLElement && event.target.closest('a'))) handlers.onActivate(index); }}>
     {renderSatelliteContent(item.satellite)}
   </div>;
 }
