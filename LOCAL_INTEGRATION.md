@@ -90,7 +90,7 @@ The default HTTP suite uses actual `fetch`, two anonymous clients without identi
 
 ## 4. Korean retrieval using the preserved 30 cases
 
-Use another **fresh evaluation database** in the disposable cluster, apply the same eight migrations, prepare another private HTTP configuration, and restart the three foreground services with it. Do not mix regression fixtures with the evaluation corpus or erase a corpus to make a metric better.
+Use another **fresh evaluation database** in the disposable cluster, apply the same nine migrations, prepare another private HTTP configuration, and restart the three foreground services with it. Do not mix regression fixtures with the evaluation corpus or erase a corpus to make a metric better.
 
 ```sh
 export KOREAN_EVAL_SPLIT=dev

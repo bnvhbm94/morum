@@ -43,6 +43,14 @@ else {
    const s=(await rpc(a,'kb_get_version',{p_query:{id:root.id}})).review_summary;assert.equal(s.effective_reviewers,0);assert.equal(s.agree,0);assert.equal(s.anonymous_reviews,2);assert.deepEqual(s.anonymous_stances,{agree:1,disagree:1,needs_review:0});
    await assert.rejects(mutate(a,'review.create',{...command,previous_review_id:x.data.id},actor),code('VALIDATION_FAILED'));
   });
+  await t.test('anonymous reviews reach kb_context: disagree as counterargument, agree as related',async()=>{
+   const ctx=await rpc(a,'kb_context',{p_query:{seeds:[ref('version',root.id)],depth:1}});
+   const reviews=ctx.items.filter(x=>x.target.kind==='review');
+   assert.equal(reviews.length,2);
+   assert.deepEqual(reviews.map(x=>x.reason).sort(),['counterargument','related']);
+   assert.equal(reviews[0].reason,'counterargument');// disagree is ordered first
+   assert.equal((await admin.query('select count(*)::int n from knowledge.review_heads where target_id=$1',[root.id])).rows[0].n,0);
+  });
   await t.test('meaning supplements remain exact-scoped immutable proposals without author ownership',async()=>{
    const start=Array.from(root.body_text).indexOf('\ubc30'),selector=canonicalSelector(root.body_text,start,start+1);
    const anchor=(await mutate(a,'anchor.create',{version_id:root.id,body_sha256:root.body_sha256,selector},actor)).data;

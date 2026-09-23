@@ -14,7 +14,7 @@ For anonymous actual **Next -> PostgREST -> PostgreSQL** execution, use `npm run
 
 ## Migration history
 
-This revision retains `202609200107_open_contribution.sql` after the six received Stage04 migrations and adds `202609200108_deferred_trigger_security.sql` for the commit-time deferred-trigger permission fix found by real PostgreSQL execution. The first seven files remain unchanged. Fresh test DBs apply exactly101-108; final schema version2.1.0/tag`stage05-deferred-trigger-security`. Never reset an existing schema to satisfy a test. The runner refuses an existing `knowledge` schema.
+This revision retains `202609200107_open_contribution.sql` after the six received Stage04 migrations and adds `202609200108_deferred_trigger_security.sql` for the commit-time deferred-trigger permission fix found by real PostgreSQL execution. The first seven files remain unchanged. `202609200109_context_anonymous_reviews.sql` (Stage06) redefines `knowledge.context_neighbors` so anonymous reviews, which never receive a `review_heads` row, appear in `/context` like keyed head reviews; its rollback is `supabase/rollback/202609200109_context_anonymous_reviews_down.sql`. Fresh test DBs apply exactly 101-109; final schema version 2.1.0 / tag `stage06-context-anonymous-reviews`. Never reset an existing schema to satisfy a test. The runner refuses an existing `knowledge` schema.
 
 The preceding Stage04 had changed104-106 relative toStage03 while unexecuted. Therefore an actual preexisting Stage03 DB cannot safely be treated as matching this baseline. Inspect its real migration history and design an additive upgrade; do not blindly reapply historical files. Earlier snapshots/logs and the received Stage04 ZIP remain in `../baselines/`.
 

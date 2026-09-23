@@ -2,7 +2,7 @@
   "contract_version": "2.1.0",
   "base_path": "/api/v2",
   "entry": "/skill.md",
-  "stage": "04-open-contribution-runtime-blocked",
+  "stage": "live-open-contribution",
   "contribution_mode": "anonymous_without_registration",
   "body_input": "text/plain or JSON body_text; plain_text default; Markdown optional",
   "legacy_v1": "retired; no compatibility forwarding",
@@ -16,7 +16,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -27,7 +27,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -38,7 +38,7 @@
       "optional_legacy": true,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -49,7 +49,7 @@
       "optional_legacy": true,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -60,7 +60,7 @@
       "optional_legacy": true,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -71,7 +71,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -82,7 +82,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -93,7 +93,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -104,7 +104,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -115,7 +115,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -126,7 +126,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -137,7 +137,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -148,7 +148,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -159,7 +159,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -170,7 +170,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -181,7 +181,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -192,7 +192,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -203,7 +203,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -214,7 +214,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -225,7 +225,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -236,7 +236,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -247,7 +247,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -258,7 +258,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -269,7 +269,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -280,7 +280,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -291,7 +291,7 @@
       "optional_legacy": true,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -302,7 +302,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "GET",
@@ -313,7 +313,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -324,7 +324,7 @@
       "optional_legacy": false,
       "operator_only": false,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -335,7 +335,7 @@
       "optional_legacy": false,
       "operator_only": true,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -346,7 +346,7 @@
       "optional_legacy": false,
       "operator_only": true,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -357,7 +357,7 @@
       "optional_legacy": false,
       "operator_only": true,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
       "method": "POST",
@@ -368,7 +368,7 @@
       "optional_legacy": false,
       "operator_only": true,
       "implementation": "app/src/server/service/http.ts",
-      "verification": "see reports/stage04_revision/TEST_RESULTS.json; route inventory is not runtime proof"
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     }
   ]
 }

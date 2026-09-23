@@ -9,8 +9,8 @@ try{
  const {rows:[exists]}=await client.query("select to_regnamespace('knowledge') is not null as present");
  if(exists.present)throw Error('knowledge already exists. No reset/drop/overwrite is allowed; use a fresh dedicated test database.');
  await client.query(await readFile('tests/db/bootstrap.sql','utf8'));
- const files=(await readdir('supabase/migrations')).filter(f=>/^20260920010[1-8]_.*\.sql$/.test(f)).sort();
- if(files.length!==8)throw Error('Expected exactly eight migrations, including the Stage05 deferred-trigger fix.');
+ const files=(await readdir('supabase/migrations')).filter(f=>/^20260920010[1-9]_.*\.sql$/.test(f)).sort();
+ if(files.length!==9)throw Error('Expected exactly nine migrations, including the Stage06 context anonymous-review fix.');
  for(const file of files)await client.query(await readFile(`supabase/migrations/${file}`,'utf8'));
  console.log(JSON.stringify({status:'passed',scope:'disposable_local_postgres_only',started_at_utc:started,finished_at_utc:new Date().toISOString(),runtime:process.version,database_version_num:version.version,applied:files},null,2));
 }catch(error){console.error(JSON.stringify(redactedDatabaseError(error)));process.exitCode=1;}finally{await client?.end();}
