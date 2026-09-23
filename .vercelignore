@@ -1,0 +1,7 @@
+# Private originals and local tooling never belong in a deployment upload.
+MY THOUGHT/
+.claude/
+.DS_Store
+.test-build/
+tests/
+docs/archive/
