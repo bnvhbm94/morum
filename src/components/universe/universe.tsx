@@ -719,7 +719,7 @@ export default function Universe() {
     })();
 
     if (process.env.NODE_ENV !== 'production') {
-      (window as unknown as {__universe?: unknown}).__universe = () => ({camera: cameraRef.current, viewport: viewportRef.current, categories: [...categoriesRef.current.values()].map(entry => ({id: entry.category.id, circle: entry.circle, star: entry.star})), fit: lastFitRef.current});
+      (window as unknown as {__universe?: unknown}).__universe = () => ({armed: armedKeyRef.current, selected: selectedKeyRef.current, camera: cameraRef.current, viewport: viewportRef.current, categories: [...categoriesRef.current.values()].map(entry => ({id: entry.category.id, circle: entry.circle, star: entry.star})), fit: lastFitRef.current});
     }
     const onResize = () => {
       if (!containerRef.current) return;
