@@ -78,6 +78,8 @@ export default function Universe() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const buttonElsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
   const selectedKeyRef = useRef<string | null>(null);
+  /** The body a deliberate tap or arrow key chose; the next tap on it opens it. Focus alone (a mouse press) does not arm. */
+  const armedKeyRef = useRef<string | null>(null);
 
   const sourceRef = useRef<UniverseSource | null>(null);
   const cameraRef = useRef<Camera>({x: 0, y: 0, scale: 1});
@@ -507,6 +509,7 @@ export default function Universe() {
     const next = current.key === selectedKeyRef.current ? directionalNode(nodes, current, key) : current;
     if (!next) return true;
     select(next.key);
+    armedKeyRef.current = next.key;
     next.el.focus({preventScroll: true});
     const world = screenToWorld(cameraRef.current, viewport, {x: next.x, y: next.y});
     glideTo({...cameraRef.current, x: world.x, y: world.y}, null);
@@ -921,7 +924,8 @@ export default function Universe() {
     if (suppressClickRef.current) return;
     const entry = categoriesRef.current.get(id);
     if (!entry) return;
-    const wasSelected = selectedKeyRef.current === id;
+    const wasArmed = armedKeyRef.current === id;
+    armedKeyRef.current = id;
     select(id);
     const camera = cameraRef.current, viewport = viewportRef.current;
     const open = entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport));
@@ -931,7 +935,7 @@ export default function Universe() {
       const centre = worldToScreen(camera, viewport, entry.star);
       const distance = Math.hypot(event.clientX - field.left - centre.x, event.clientY - field.top - centre.y);
       if (distance <= screenRadius(entry.star, camera) * ORBIT_INNER) {
-        if (wasSelected || event.detail >= 2) void openStar(id);
+        if (wasArmed || event.detail >= 2) void openStar(id);
         else centreOn(entry.star);
         return;
       }
@@ -946,7 +950,8 @@ export default function Universe() {
     if (suppressClickRef.current) return;
     const key = itemKey(categoryId, item.id);
     // First tap: select and centre the planet (its title shows). Second tap, double tap or Enter: read it.
-    if (selectedKeyRef.current !== key && event.detail < 2) {
+    if (armedKeyRef.current !== key && event.detail < 2) {
+      armedKeyRef.current = key;
       select(key);
       const circle = itemCirclesRef.current.get(categoryId)?.get(item.id)?.circle;
       if (circle) centreOn(circle);
