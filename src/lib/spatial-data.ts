@@ -1,5 +1,6 @@
 import type {
   Anchor,
+  Annotation,
   ContentRef,
   Evidence,
   ObjectView,
@@ -491,4 +492,34 @@ export async function loadSpatialCitations(view: VersionView, signal?: AbortSign
     const anchorMatches = Boolean(anchor && anchor.version_id === view.version.id && codePointSlice(view.version.body_text, anchor.selector.start, anchor.selector.end) === anchor.selector.exact);
     return {index: index + 1, evidence: item, source: item.basis.kind === 'external' ? sourceById.get(item.basis.source_id) ?? null : null, anchor, anchorMatches};
   });
+}
+
+// ---- Word-sense meanings for one document: annotations on the version's anchors, superseded ones dropped.
+export const MEANING_ANCHOR_LIMIT = 30;
+
+export type Meaning = {
+  annotation: Annotation;
+  anchor: Anchor | null;
+  /** True when the anchor's exact text still matches the document body at the recorded code-point range. */
+  anchorMatches: boolean;
+};
+
+export async function loadSpatialMeanings(view: VersionView, signal?: AbortSignal): Promise<Meaning[]> {
+  const page = await apiGet<Paged<Annotation>>(`/annotations?version_id=${encodeURIComponent(view.version.id)}&limit=50`, signal);
+  const superseded = new Set(page.items.flatMap(item => item.supersedes_annotation_id ? [item.supersedes_annotation_id] : []));
+  const current = page.items.filter(item => !superseded.has(item.id));
+
+  const anchors = await Promise.all(current.slice(0, MEANING_ANCHOR_LIMIT).map(async annotation => {
+    try { const object = await apiGet<ObjectView>(`/objects/anchor/${encodeURIComponent(annotation.anchor_id)}`, signal); return [annotation.anchor_id, object.value as Anchor] as const; }
+    catch { return [annotation.anchor_id, null] as const; }
+  }));
+  const anchorById = new Map(anchors);
+
+  return current
+    .map(annotation => {
+      const anchor = anchorById.get(annotation.anchor_id) ?? null;
+      const anchorMatches = Boolean(anchor && anchor.body_sha256 === view.version.body_sha256 && codePointSlice(view.version.body_text, anchor.selector.start, anchor.selector.end) === anchor.selector.exact);
+      return {annotation, anchor, anchorMatches};
+    })
+    .sort((a, b) => (a.anchor?.selector.start ?? Infinity) - (b.anchor?.selector.start ?? Infinity));
 }

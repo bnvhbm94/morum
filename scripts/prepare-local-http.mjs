@@ -12,7 +12,7 @@ try{
  const ports=[Number(process.env.LOCAL_POSTGREST_PORT??55475),Number(process.env.LOCAL_PREFIX_PORT??55476),Number(process.env.LOCAL_NEXT_PORT??55477)];
  if(new Set(ports).size!==3||ports.some(p=>!Number.isSafeInteger(p)||p<1025||p>65535))throw Error('Use three distinct high-numbered loopback ports.');
  const {Client}=await import('pg');db=new Client({connectionString:cfg.connectionString,connectionTimeoutMillis:5000});await db.connect();await assertTestDatabase(db,cfg);
- if((await db.query('select migration_tag from knowledge.schema_info where singleton')).rows[0]?.migration_tag!=='stage06-context-anonymous-reviews')throw Error('Apply the current nine migrations to this fresh local database first.');
+ if((await db.query('select migration_tag from knowledge.schema_info where singleton')).rows[0]?.migration_tag!=='stage07-read-surfaces')throw Error('Apply the current ten migrations to this fresh local database first.');
  const suffix=randomUUID().replaceAll('-',''),role='nuanox_test_'+suffix.slice(0,16),password=randomBytes(32).toString('hex'),jwtSecret=randomBytes(48).toString('base64url');
  const b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url'),iat=Math.floor(Date.now()/1000),head=b64({alg:'HS256',typ:'JWT'}),payload=b64({role:'service_role',iat,exp:iat+86400});
  const token=head+'.'+payload+'.'+createHmac('sha256',jwtSecret).update(head+'.'+payload).digest('base64url');
@@ -29,5 +29,5 @@ try{
  await mkdir(dir,{recursive:true,mode:0o700});const path=join(dir,`stack-${suffix}.json`),file=await open(path,'wx',0o600);
  try{await file.writeFile(JSON.stringify({created_at_utc:new Date().toISOString(),expires_at_utc:new Date((iat+86400)*1000).toISOString(),scope:'disposable-local-postgrest-only',env},null,2)+'\n');await file.sync();}finally{await file.close();}
  console.log(JSON.stringify({status:'local_configuration_prepared_not_started',file:path,expires_in_seconds:86400,provider:'disabled',note:'Private file contains local-only secrets. No hosted mapping, server execution or deployment has been verified.'}));
-}catch(error){console.error(JSON.stringify({status:'not_prepared',code:typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'LOCAL_PREPARATION_BLOCKED',reason:!process.env.TEST_DATABASE_URL?'TEST_DATABASE_URL absent; zero DB connections attempted.':'Check the documented local acknowledgements, private path, nine migrations and PostgreSQL role privileges. No secret or raw SQL error is printed.'}));process.exitCode=1;}
+}catch(error){console.error(JSON.stringify({status:'not_prepared',code:typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'LOCAL_PREPARATION_BLOCKED',reason:!process.env.TEST_DATABASE_URL?'TEST_DATABASE_URL absent; zero DB connections attempted.':'Check the documented local acknowledgements, private path, ten migrations and PostgreSQL role privileges. No secret or raw SQL error is printed.'}));process.exitCode=1;}
 finally{await db?.end();}

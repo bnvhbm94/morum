@@ -10,10 +10,12 @@ import {validateIdempotencyKey} from '../../domain/idempotency.js';
 import {sha256} from '../../domain/hash.js';
 import type {Services} from './factory.js';
 import type {AgentContext} from './auth.js';
-import {HttpError,readJson,readRecordBody,queryParams,intQuery} from './transport.js';
+import {HttpError,readJson,readRecordBody,queryParams,intQuery,parseDeclaredAgent} from './transport.js';
 import {matchRoute,allowedMethods} from './routes.js';
 import {PROFILE} from './embeddings.js';
 import {SINGLE_OBJECT_MAX_BYTES} from '../db/client.js';
+import {checkedRpc,checkUrlReport,checkDossier,checkAttention} from './rpc-shapes.js';
+import {renderDossierText} from './dossier-text.js';
 const BASE='/api/v2';
 const headers=(id:string):Record<string,string>=>({'cache-control':'no-store','x-content-type-options':'nosniff','x-contract-version':CONTRACT_VERSION,'x-request-id':id,'referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; frame-ancestors 'none'"});
 function success(data:unknown,id:string,replayed=false,status=200,maxBytes=1048576):Response{
@@ -61,7 +63,7 @@ export function createHandler(factory:()=>Services,health:()=>Promise<T.Health>=
    if(template==='/capabilities'){
     queryParams(url,[]);const state=await s.db.call<T.Health>('kb_health',{});ensure(state?.contract_version===CONTRACT_VERSION&&state.database==='reachable'&&state.status==='ok','NOT_CONFIGURED');
     const available=s.embeddings.availability()===null;
-    const result:T.Capabilities={contract_version:CONTRACT_VERSION,authentication:{mode:'open_contribution',human_login:false,owner_claim:false,registration_required:false,credentials_required:false,agent_registration:s.auth.registrationEnabled,anonymous_reviews:'append_only'},content:{default_format:'plain_text',markdown_required:false,raw_text_post:true},search:{semantic_enabled:available,profile_id:available?PROFILE:null,quality_gate:'not_evaluated'},limits:{write_bytes:1048576,body_code_points:100000,search_limit:20}};
+    const result:T.Capabilities={contract_version:CONTRACT_VERSION,authentication:{mode:'open_contribution',human_login:false,owner_claim:false,registration_required:false,credentials_required:false,agent_registration:s.auth.registrationEnabled,anonymous_reviews:'append_only'},content:{default_format:'plain_text',markdown_required:false,raw_text_post:true},search:{semantic_enabled:available,profile_id:available?PROFILE:null,quality_gate:'not_evaluated'},limits:{write_bytes:1048576,body_code_points:100000,search_limit:20},features:['url_report','dossier','attention','work_requests','declared_agent']};
     return respond(result);
    }
    if(template==='/agents/enroll'){
@@ -93,6 +95,38 @@ export function createHandler(factory:()=>Services,health:()=>Promise<T.Health>=
     queryParams(url,[]);const q=object(await readJson(request,16384),['seeds','depth','cursor'],['seeds']);ensure(Array.isArray(q.seeds));const depth=q.depth??1;integer(depth,1,2);if(q.cursor!==undefined)text(q.cursor,4096);
     return respond(await s.retrieval.context(q.seeds as T.ContentRef[],depth as 1|2,q.cursor as string|undefined),false,200,262144);
    }
+   if(template==='/url-report'){
+    const q=queryParams(url,['url']);
+    if(q.url===undefined||q.url.length===0||q.url.length>2048||!/^https?:\/\//i.test(q.url))throw new HttpError('VALIDATION_FAILED',400);
+    const result=checkedRpc<T.UrlReport>(await s.db.call('kb_url_report',{p_query:{url:q.url}}),checkUrlReport);
+    return respond(result,false,200,262144);
+   }
+   if(template==='/dossier'){
+    const q=queryParams(url,['target_kind','target_id','budget','format','blind']);
+    ensure(q.target_kind==='version','VALIDATION_FAILED');uuid(q.target_id);
+    const budget=intQuery(q.budget,1000,20000,6000);
+    const format=q.format??'json';ensure(format==='json'||format==='text');
+    let blind=false;if(q.blind!==undefined){ensure(q.blind==='true'||q.blind==='false');blind=q.blind==='true';}
+    const dossier=checkedRpc<T.Dossier>(await s.db.call('kb_dossier',{p_query:{target:{kind:'version',id:q.target_id},blind}}),checkDossier);
+    if(format==='text'){
+     const body=renderDossierText(dossier,budget);
+     return new Response(request.method==='HEAD'?null:body,{headers:{...headers(id),'content-type':'text/plain; charset=utf-8'}});
+    }
+    return respond(dossier,false,200,1048576);
+   }
+   if(template==='/attention'){
+    const q=queryParams(url,['limit','reasons','seed']);
+    const limit=intQuery(q.limit,1,50,20);
+    let reasons:string[]|undefined;
+    if(q.reasons!==undefined){
+     reasons=q.reasons.split(',').map(r=>r.trim()).filter(r=>r.length>0);
+     const allowed=['quote_not_found','contested','no_basis','requested','quote_unverifiable','unreviewed','uncategorized'];
+     ensure(reasons.length>0&&reasons.every(r=>allowed.includes(r)),'VALIDATION_FAILED');
+    }
+    if(q.seed!==undefined)ensure(/^[A-Za-z0-9._~-]{1,64}$/.test(q.seed),'VALIDATION_FAILED');
+    const result=checkedRpc<T.AttentionList>(await s.db.call('kb_attention',{p_query:{limit,...(reasons?{reasons}:{}),...(q.seed!==undefined?{seed:q.seed}:{})}}),checkAttention);
+    return respond(result);
+   }
    if(template.startsWith('/admin/')){
     queryParams(url,[]);const q=await readJson(request,16384);
     if(template==='/admin/index/drain'){const input=object(q,['limit'],['limit']);integer(input.limit,1,3);return respond(await s.worker.drain(actor!,input.limit));}
@@ -104,15 +138,18 @@ export function createHandler(factory:()=>Services,health:()=>Promise<T.Health>=
     const input=object(q,['agent_id','reason'],['agent_id','reason']);uuid(input.agent_id);text(input.reason,2000);return respond(await s.db.call('kb_suspend_agent',{p_actor:actor,p_query:input}));
    }
    if(verb==='POST'){
-    queryParams(url,[]);const name:Record<string,keyof CommandMap>={'/records':'record.create','/records/:record_id/versions':'version.create','/anchors':'anchor.create','/sources':'source.create','/annotations':'annotation.create','/relations':'relation.create','/evidence':'evidence.create','/reviews':'review.create'};
+    queryParams(url,[]);const name:Record<string,keyof CommandMap>={'/records':'record.create','/records/:record_id/versions':'version.create','/anchors':'anchor.create','/sources':'source.create','/annotations':'annotation.create','/relations':'relation.create','/evidence':'evidence.create','/reviews':'review.create','/work-requests':'work_request.create','/work-requests/:work_request_id':'work_request.update'};
     const op=name[template];ensure(op,'NOT_FOUND');
     const requestKey:string=request.headers.has('idempotency-key')?key(request):randomUUID();writeKey=requestKey;
     const body=op==='record.create'?normalizeRecordRequest(await readRecordBody(request)):await readJson(request);validateCommand(op,body);
-    const result=await mutate(s.repo,contributor??actor!,op,body as CommandMap[typeof op]['input'],requestKey,p.record_id);
+    const declared=parseDeclaredAgent(request.headers.get('morum-agent'));
+    const pathId=p.record_id??p.work_request_id;
+    const result=await mutate(s.repo,contributor??actor!,op,body as CommandMap[typeof op]['input'],requestKey,pathId,declared);
     return respond(result.data,result.replayed,result.replayed?200:201);
    }
    switch(template){
     case '/records':{const q=queryParams(url,['limit','cursor']);return respond(await s.repo.listRecords(listQuery(q)));}
+    case '/work-requests':{const q=queryParams(url,['status','limit','cursor']);if(q.status!==undefined)ensure(['open','in_progress','resolved','closed'].includes(q.status));return respond(await s.repo.listWorkRequests({...listQuery(q),...(q.status!==undefined?{status:q.status as T.WorkStatus}:{})}));}
     case '/records/:record_id':queryParams(url,[]);return respond(await s.repo.getRecord(p.record_id),false,200,SINGLE_OBJECT_MAX_BYTES);
     case '/records/:record_id/versions':{const q=queryParams(url,['limit','cursor']);return respond(await s.repo.listVersions(p.record_id,listQuery(q)));}
     case '/versions/:version_id':queryParams(url,[]);return respond(await s.repo.getVersion(p.version_id),false,200,SINGLE_OBJECT_MAX_BYTES);

@@ -327,6 +327,72 @@
       "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
     },
     {
+      "method": "GET",
+      "path": "/api/v2/url-report",
+      "auth": "public",
+      "response": "UrlReport",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/dossier",
+      "auth": "public",
+      "response": "Dossier",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/attention",
+      "auth": "public",
+      "response": "AttentionList",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/work-requests",
+      "auth": "public",
+      "response": "Paged<WorkRequest>",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/work-requests",
+      "auth": "contribution",
+      "response": "WorkRequest",
+      "registration_required": false,
+      "optional_legacy": false,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/work-requests/:work_request_id",
+      "auth": "agent",
+      "response": "WorkRequest",
+      "registration_required": false,
+      "optional_legacy": true,
+      "operator_only": false,
+      "implementation": "app/src/server/service/http.ts",
+      "verification": "served by the production runtime; exercised by tests/db, tests/service and tests/http against a disposable local PostgreSQL (see DB_TESTING.md)"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/admin/index/drain",
       "auth": "operator",

@@ -11,7 +11,7 @@ else {
   const agentA=await h.enroll('SYNTHETIC Stage04 A'),agentB=await h.enroll('SYNTHETIC Stage04 B');let root,child;
   await t.test('S04DB01 actual grants, RLS, search_path; legacy task RPCs remain denied',async()=>{
    const functions=(await admin.query("select p.oid,p.proname,p.prosecdef,p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'kb_%' order by p.proname")).rows;
-   assert.equal(functions.length,39);const retired=new Set(['kb_create_work_request','kb_update_work_request','kb_list_work_requests']);
+   assert.equal(functions.length,42);const retired=new Set();
    for(const f of functions){assert.equal(f.prosecdef,true);assert.ok(f.proconfig.some(s=>s==='search_path=""'||s==='search_path='));
     const p=(await admin.query("select has_function_privilege('anon',$1::oid,'execute') anon,has_function_privilege('authenticated',$1::oid,'execute') authed,has_function_privilege('service_role',$1::oid,'execute') service",[f.oid])).rows[0];assert.deepEqual(p,{anon:false,authed:false,service:!retired.has(f.proname)});
    }

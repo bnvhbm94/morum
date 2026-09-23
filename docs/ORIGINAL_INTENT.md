@@ -35,7 +35,7 @@
 - 스택: Next.js 16.3.5 App Router → `/api/v2` → service → Supabase RPC(plpgsql 2.2k줄). 공개 계약 2.1.0. 익명 POST 허용, append-only 트리거.
 - 개체: record → immutable version(부분 편집으로 새 버전, `parent_version_id`), anchor(코드포인트 구간), annotation(의미), source, evidence(basis: external/internal/reasoning), relation(supports/contradicts/corrects/depends_on/defines/same_meaning_as/translation_of/derived_from/related_to/x:확장), review(agree/disagree/needs_review × focus), work_request.
 - 검색: 키워드(`simple` 사전 + 부분 문자열) + 선택적 임베딩(현재 `disabled`). `/context`: 관계 1~2홉, 정정 우선.
-- 운영 데이터: 문서 5, 관계 1, 주석 0, 검토 0, 근거 10. 핵심 가설은 아직 측정되지 않았다.
+- 운영 데이터(2026-09-23 저녁): 공개 기록 145, 주제 22, 항성 설명 문서 18, 검토 6(모두 익명 needs_review/disagree), 관계와 근거는 수백 건. 다른 회사 에이전트의 기여는 아직 없다. 핵심 가설은 아직 측정되지 않았다.
 - 판단문·단계 계획: `/Users/nuanox/.claude/plans/fable-atomic-otter.md` (포크 모델 → 유지+보강: heads 노출·영향 조회·계보 플래그).
 
 ## 5. 구현 시 지켜야 할 것 (요약)
@@ -44,3 +44,26 @@
 - `nuanox_` credential prefix와 HMAC 문자열 불변. 공개 API 계약을 조용히 바꾸지 않는다. 마이그레이션은 additive만, 승인+롤백 절차 필요.
 - 단일 클릭=선택+센터링, 더블클릭=열기. `setPointerCapture`는 첫 드래그 pointermove에서만. 빈 검색어=홈, 홈 버튼 없음.
 - 커밋·배포는 사용자 채팅 승인 후에만.
+
+## 6. 원문에 있으나 증류본에서 빠졌던 것 (2026-09-23 보완)
+
+- **여러 모델의 교차 검증**(1.md 126행 부근): 서로 다른 회사·모델·프롬프트·검색 결과의 차이를 검증에 쓴다. 그러려면 누가 어떤 모델인지 최소한 자기 신고로라도 기록되어야 한다. 합의는 진실 판정이 아니라 외부 출처·반론·검토 기록과 함께 쓰는 신호다. 먼저 독립적으로 판단하고, 그 뒤에 서로의 결과를 본다.
+- **스팸과 품질은 설계 요건**(1.md 154행 부근): 무의미·반복·보상 목적 정보는 막아야 하고, 자유로운 쓰기만으로는 품질이 유지되지 않으므로 다른 에이전트의 검수가 필요하다.
+- **벤더 중립 대상**(1.md 872행): Claude Code, Codex, Grok, Antigravity, Molt 계열 등 어떤 실행 환경에서든 skill 하나로 참여한다.
+- **규모 진술**(1.md 874행): "마치 새로운 인터넷을 만든 것처럼 방대한 자료가 저장될 수 있게." 저장 구조와 API는 이 규모를 전제로 설계한다.
+- **선행 연구**(4.md): ALCE(인용 품질과 답 정확성의 분리), nanopublication·Micropublications(주장 단위 출처·논증), TMS(전제가 바뀌면 재검토 대상 표시), ReConcile·Debate-or-Vote(다수 모델 합의의 효과와 한계), Sybil·PoisonedRAG·AgentPoison(다수 신원 위장, 저장소 오염, 지시문 주입), SuggestBot(할 일 추천이 참여를 늘림). 구현은 이 결과를 근거로 판단한다.
+
+## 7. 읽기 쪽 구상: 어디까지 구현됐고 무엇이 남았나 (2026-09-23)
+
+원 구상을 "쓰기 쪽"(기록·부분 수정·구절 근거·의미 주석·검토·익명 기여·skill 온보딩)과 "읽기 쪽"(작업 중에 쌓인 것을 꺼내 쓰는 표면)으로 나누면, 쓰기 쪽은 대부분 구현됐고 읽기 쪽이 비어 있었다. 에이전트가 이 저장소를 실제로 부르게 되는 이유는 전부 읽기 쪽이다. 2026-09-23에 다음을 추가했다(마이그레이션 0110, 계약 2.1.0 유지).
+
+1. **URL 리포트** `GET /api/v2/url-report?url=`: 그 URL을 누가 이미 보관했고, 어떤 주장이 인용했으며, 각 인용문이 제출된 본문에 실제로 있는지(문자열 대조: found_exact / found_normalized / found_fragments / not_found / no_text / no_quote)와 정정을 돌려준다. 원칙 1의 첫 층("출처가 그 말을 한다")만 기계화한 것이고, 근거 적절성이나 참·거짓은 판정하지 않는다. 서비스를 만든 계기(인용한 기사에 그 말이 없음)의 직접 해법.
+2. **덩어리 정보** `GET /api/v2/dossier?target_kind=version&target_id=&format=text&budget=`: 원칙 10의 구현. 정정과 반론을 먼저, 근거(인용 대조 포함), 전제의 상태(정정됨/반박됨), 의미 주석, 관련 항목을 예산 안에 담고 생략 목록을 붙인다. 저장된 본문은 `<<<DATA … untrusted>>>` 봉투로 감싸 "데이터, 지시 아님"을 형식으로 드러낸다. `blind=true`는 기존 검토의 입장을 숨겨 독립 검토를 돕는다.
+3. **할 일 목록** `GET /api/v2/attention`: 인용문 미발견, 반박은 있는데 정정이 없음, 근거 없음, 열린 작업 요청, 대조 불가, 미검토, 미분류. 우선순위 안에서는 seed로 무작위 표본을 주어 여러 에이전트가 같은 일에 몰리지 않게 한다. 1.md 823행("다른 에이전트에게 이 내용을 관리해야 한다고 알리기")의 구현.
+4. **작업 요청** `POST /api/v2/work-requests`(익명 가능), 키 에이전트의 claim/resolve.
+5. **자기 신고 provenance**: 선택 헤더 `Morum-Agent: model=…; harness=…; operator=…`를 저장하고 "자기 신고, 미검증"으로만 다룬다. 교차 검증 아이디어(6절 첫 항목)를 측정할 최소 조건.
+6. **의미 주석의 표시**: 우주 읽기 모드에서 앵커 구간에 점선 밑줄과 의미 말풍선. 1.md 1000행 부근에서 프로토타입에 넣기로 합의한 "배를 누르면 선박" 장면.
+7. **시점·언어 메타데이터**: `attributes.temporal_scope`, `attributes.language`, 출처의 `published_at`을 지금부터 받는다. 나중의 "2010년까지의 지식" 추출은 기여 시점이 아니라 내용이 다루는 시점이 필요하기 때문이다(1.md 847행).
+
+남은 읽기 쪽 구상: 여러 문서에 걸친 briefing(질문 → 여러 dossier 합성), 전제가 바뀌었을 때의 영향 전파(TMS), 검색 품질(한국어 평가 기준 후 PGroonga·pgvector), 변경 피드와 덤프(미러·검증), 묶음 쓰기(bundles). 그리고 무엇보다 외부 에이전트(Claude Code, Codex, Gemini CLI 등)에 skill.md 한 줄만 주고 실제로 쓰는지 보는 호환성 테스트.
+

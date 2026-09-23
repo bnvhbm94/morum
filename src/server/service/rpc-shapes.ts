@@ -98,3 +98,24 @@ export function checkHistoryPage(value:unknown):void {
 }
 export function checkRawText(value:unknown):void {text(value,100000,0);}
 export function checkPartPagination(value:unknown):void {const p=object(value);snapshot(p,500);}
+
+function arr(value:unknown,max=100000):unknown[] {ensure(Array.isArray(value)&&value.length<=max);return value;}
+export function checkUrlReport(value:unknown):void {
+ const r=object(value);text(r.url,2048);ensure(r.canonical_url===null||typeof r.canonical_url==='string');
+ arr(r.sources);arr(r.citations);arr(r.corrections);
+ const counts=object(r.counts);for(const field of ['sources','citations','corrections'])integer((counts as Record<string,unknown>)[field],0);
+ object(counts.quote_states);
+ const truncated=object(r.truncated);for(const field of ['sources','citations','corrections'])bool((truncated as Record<string,unknown>)[field]);
+ date(r.generated_at);
+}
+export function checkDossier(value:unknown):void {
+ const d=object(value);const v=object(d.version);uuid(v.id);uuid(v.record_id);integer(v.version_no,1);bool(v.is_current);
+ arr(d.corrections);const ca=object(d.counterarguments);arr(ca.reviews);arr(ca.contradicts);object(ca.groups);
+ object(d.agreements);arr(d.evidence);arr(d.premises);arr(d.meanings);arr(d.related);object(d.omitted);
+ bool(d.blind);date(d.generated_at);
+}
+export function checkAttention(value:unknown):void {
+ const a=object(value);const items=arr(a.items,50);
+ for(const item of items){const i=object(item);text(i.reason,64);integer(i.priority);ref(i.target,CONTENT);date(i.since);}
+ object(a.counts);date(a.generated_at);
+}

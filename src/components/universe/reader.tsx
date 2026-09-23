@@ -5,7 +5,7 @@
 // Space to page), and the same satellites: earlier versions, evidence, declared relations, reviews.
 import {useEffect, useRef, useState, type ReactNode} from 'react';
 import type {ContentRef, Version, VersionView} from '../../contracts/types';
-import {loadSpatialCitations, loadSpatialHistory, loadSpatialNeighbors, loadSpatialVersion, type Citation, type SpatialNeighbor} from '../../lib/spatial-data';
+import {loadSpatialCitations, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
 import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
@@ -16,7 +16,7 @@ export type ReaderTarget =
 
 export type ReaderNeighbor = {versionId: string; predicate: string};
 
-type Loaded = {view: VersionView; citations: Citation[]; history: Version[]; neighbors: SpatialNeighbor[]; hasMoreNeighbors: boolean};
+type Loaded = {view: VersionView; citations: Citation[]; meanings: Meaning[]; history: Version[]; neighbors: SpatialNeighbor[]; hasMoreNeighbors: boolean};
 
 const RELATION_LABEL: Record<string, string> = {supports: '지지', corrects: '정정', depends_on: '의존', derived_from: '파생', contradicts: '반론', defines: '정의', related_to: '관련', same_meaning_as: '같은 의미', translation_of: '번역'};
 export function relationLabel(predicate: string): string { return RELATION_LABEL[predicate] || predicate; }
@@ -60,12 +60,13 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           loadSpatialNeighbors(ref, {displayLimit: 12}, controller.signal).catch(() => ({items: [] as SpatialNeighbor[], hasMore: false})),
         ]);
         if (controller.signal.aborted) return;
-        const [history, citations] = await Promise.all([
+        const [history, citations, meanings] = await Promise.all([
           loadSpatialHistory(view.version.record_id, controller.signal).catch(() => [] as Version[]),
           loadSpatialCitations(view, controller.signal).catch(() => [] as Citation[]),
+          loadSpatialMeanings(view, controller.signal).catch(() => [] as Meaning[]),
         ]);
         if (controller.signal.aborted) return;
-        setLoaded({view, citations, history, neighbors: neighborResult.items, hasMoreNeighbors: neighborResult.hasMore});
+        setLoaded({view, citations, meanings, history, neighbors: neighborResult.items, hasMoreNeighbors: neighborResult.hasMore});
         setLoading(false);
         onNeighbors(neighborResult.items.flatMap(item => item.node.target.kind === 'version' ? [{versionId: item.node.target.id, predicate: item.relation.predicate}] : []));
         requestAnimationFrame(() => articleRef.current?.focus({preventScroll: true}));
@@ -129,7 +130,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
               {loaded.view.version.title
                 ? <h2 className="universe-doc-title" id="universe-doc-title">{loaded.view.version.title}</h2>
                 : <h2 className="universe-sr-only" id="universe-doc-title">제목 없는 기록</h2>}
-              <div className="universe-doc-text">{renderCitedBody(loaded.view.version.body_text, loaded.citations, 'universe-cite')}</div>
+              <div className="universe-doc-text">{renderCitedBody(loaded.view.version.body_text, loaded.citations, 'universe-cite', loaded.meanings)}</div>
               <nav className="universe-doc-links" aria-label="문서 상세">
                 <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}`}>고정 링크와 전체 맥락</a>
                 <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}/raw`} target="_blank" rel="noreferrer">원문</a>
@@ -186,6 +187,12 @@ function rightSatellites(loaded: Loaded, open: (versionId: string) => void): Rea
   for (const neighbor of loaded.neighbors.filter(item => item.side !== 'left')) {
     out.push(satellite(`r-${neighbor.relation.id}`, 'relation', relationLabel(neighbor.relation.predicate), neighbor.node.title, neighbor.node.target.kind === 'version' ? () => open(neighbor.node.target.id) : undefined));
   }
+  for (const meaning of loaded.meanings) {
+    const exact = meaning.anchor ? truncateExact(meaning.anchor.selector.exact) : '';
+    const body = exact ? `“${exact}” — ${meaning.annotation.meaning}` : meaning.annotation.meaning;
+    const conceptId = meaning.annotation.concept_version_id;
+    out.push(satellite(`m-${meaning.annotation.id}`, 'meaning', '의미', body, conceptId ? () => open(conceptId) : undefined));
+  }
   const summary = loaded.view.review_summary;
   out.push(satellite('review', 'review', '검토', summary.review_state === 'unreviewed' ? '아직 검토 없음' : `${summary.agree} 동의 · ${summary.disagree} 반대 · ${summary.needs_review} 검토 필요`));
   return cap(out, loaded.hasMoreNeighbors, loaded.view.version.id);
@@ -194,6 +201,11 @@ function rightSatellites(loaded: Loaded, open: (versionId: string) => void): Rea
 function cap(items: ReactNode[], needsMore: boolean, versionId: string): ReactNode[] {
   if (items.length <= SATELLITE_CAP && !needsMore) return items;
   return [...items.slice(0, SATELLITE_CAP - 1), satellite('more', 'more', '… 더 있음', <a href={`/versions/${encodeURIComponent(versionId)}`}>전체 맥락</a>)];
+}
+
+function truncateExact(text: string): string {
+  const points = Array.from(text);
+  return points.length > 24 ? `${points.slice(0, 24).join('')}…` : text;
 }
 
 function hostOf(url: string): string {

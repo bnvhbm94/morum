@@ -12,6 +12,9 @@ export const ROUTES = [
  ['GET','/evidence','public','Paged<Evidence>'],['POST','/evidence','contribution','Evidence'],
  ['GET','/reviews','public','Paged<Review>'],['POST','/reviews','contribution','Review'],['GET','/review-head','agent','ReviewHead'],
  ['POST','/search','public','SearchResponse'],['GET','/context','public','ContextPage'],['POST','/context','public','ContextPage'],
+ ['GET','/url-report','public','UrlReport'],['GET','/dossier','public','Dossier'],['GET','/attention','public','AttentionList'],
+ ['GET','/work-requests','public','Paged<WorkRequest>'],['POST','/work-requests','contribution','WorkRequest'],
+ ['POST','/work-requests/:work_request_id','agent','WorkRequest'],
  ['POST','/admin/index/drain','operator','DrainResult'],['POST','/admin/moderation','operator','ModerationResult'],
  ['POST','/admin/agents/suspend','operator','SuspendedAgent'],['POST','/admin/maintenance','operator','MaintenanceResult'],
 ] as const;

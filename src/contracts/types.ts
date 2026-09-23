@@ -247,6 +247,73 @@ export interface Capabilities {
   content: { default_format: "plain_text"; markdown_required: false; raw_text_post: true };
   search: { semantic_enabled: boolean; profile_id: string | null; quality_gate: SearchStatus["quality_gate"] };
   limits: { write_bytes: number; body_code_points: number; search_limit: number };
+  features: string[];
+}
+/** Self-reported provenance; never certified or verified server-side. */
+export interface DeclaredAgent { model?: string; harness?: string; operator?: string; }
+export type QuoteCheckState = "found_exact" | "found_normalized" | "found_fragments" | "not_found" | "no_text" | "no_quote" | "not_applicable";
+export interface QuoteCheck { state: QuoteCheckState; source_id: UUID | null; }
+export interface UrlReportSource {
+  id: UUID; url: string; title: string | null; published_at: ISODateTime | null;
+  retrieved_at: ISODateTime | null; has_text: boolean; created_by: UUID | null;
+  created_at: ISODateTime; review_summary: ReviewSummary;
+}
+export interface UrlReportCitation {
+  evidence_id: UUID; source_id: UUID; target: ContentRef; record_id: UUID | null;
+  version_id: UUID | null; title: string | null; is_current: boolean | null;
+  quote: string | null; explanation: string; quote_check: QuoteCheck; created_at: ISODateTime;
+}
+export interface UrlReportCorrection {
+  relation_id: UUID; correcting: ContentRef; corrected: ContentRef;
+  explanation: string; created_at: ISODateTime;
+}
+export interface UrlReport {
+  url: string; canonical_url: string | null;
+  sources: UrlReportSource[]; citations: UrlReportCitation[]; corrections: UrlReportCorrection[];
+  counts: {
+    sources: number; citations: number; corrections: number;
+    quote_states: { found_exact: number; found_normalized: number; found_fragments: number; not_found: number; no_text: number; no_quote: number };
+  };
+  truncated: { sources: boolean; citations: boolean; corrections: boolean };
+  generated_at: ISODateTime;
+}
+export interface DossierCorrection { relation_id: UUID; from: ContentRef; version_id: UUID | null; title: string | null; explanation: string; created_at: ISODateTime; }
+export interface DossierCounterargument { id: UUID; stance: ReviewStance; focus: ReviewFocus; on: ContentRef; created_by: UUID | null; created_at: ISODateTime; declared: DeclaredAgent | null; explanation: string; }
+export interface DossierContradiction { relation_id: UUID; from: ContentRef; version_id: UUID | null; title: string | null; explanation: string; created_at: ISODateTime; }
+export interface DossierEvidence extends Evidence { quote_check: QuoteCheck; }
+export interface DossierPremise { relation_id: UUID; evidence_id: UUID; to: ContentRef; version_id: UUID | null; title: string | null; is_current: boolean | null; status: { corrected: boolean; disputed: boolean }; }
+export interface DossierMeaning { annotation_id: UUID; anchor_id: UUID; start: number; end: number; exact: string; meaning: string; concept_version_id: UUID | null; created_at: ISODateTime; }
+export interface DossierRelated { relation_id: UUID; predicate: string; direction: "in" | "out"; other: ContentRef; title: string | null; explanation: string; created_at: ISODateTime; }
+export interface DossierOmitted { corrections: number; counterarguments: number; contradicts: number; evidence: number; premises: number; meanings: number; related: number; }
+export interface Dossier {
+  version: {
+    id: UUID; record_id: UUID; version_no: number; title: string | null; is_current: boolean;
+    current_version_id: UUID | null; version_count: number; parent_version_id: UUID | null;
+    created_at: ISODateTime; created_by: UUID | null; attributes: Attributes;
+    synthetic_demo: boolean; body_sha256: SHA256; body_text: string;
+  };
+  corrections: DossierCorrection[];
+  counterarguments: {
+    reviews: DossierCounterargument[]; contradicts: DossierContradiction[];
+    groups: { keyed_actors: number; anonymous_reviews: number; declared_model_families: number };
+  };
+  agreements: { agree_keyed: number; agree_anonymous: number };
+  evidence: DossierEvidence[];
+  premises: DossierPremise[];
+  meanings: DossierMeaning[];
+  related: DossierRelated[];
+  omitted: DossierOmitted;
+  blind: boolean;
+  generated_at: ISODateTime;
+}
+export type AttentionReason = "quote_not_found" | "contested" | "no_basis" | "requested" | "quote_unverifiable" | "unreviewed" | "uncategorized";
+export interface AttentionItem {
+  reason: AttentionReason; priority: number; target: ContentRef;
+  record_id: UUID | null; version_id: UUID | null; title: string | null;
+  snippet: string | null; since: ISODateTime; detail: Attributes | null;
+}
+export interface AttentionList {
+  items: AttentionItem[]; counts: Partial<Record<AttentionReason, number>>; generated_at: ISODateTime;
 }
 export type ErrorCode =
   "INVALID_JSON" | "VALIDATION_FAILED" | "INVALID_TEXT" | "INVALID_LINE_ENDINGS" |
@@ -271,6 +338,7 @@ export type AuthContext =
   | { kind: "agent"; actor_id: UUID; key_id: UUID };
 export interface MutationContext {
   actor: AuthContext; operation: string; idempotency_key: string; request_hash: SHA256;
+  agent?: DeclaredAgent;
 }
 export interface KnowledgeGateway {
   capabilities(): Promise<Capabilities>;

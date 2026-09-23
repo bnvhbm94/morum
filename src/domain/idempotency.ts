@@ -1,4 +1,4 @@
-import type { AuthContext, MutationContext } from '../contracts/types.js';
+import type { AuthContext, DeclaredAgent, MutationContext } from '../contracts/types.js';
 import {ensure,fail} from './errors.js';
 import {sha256} from './hash.js';
 import {validateScalar} from './text.js';
@@ -24,6 +24,8 @@ export function validateIdempotencyKey(value:unknown):string {
  ensure(typeof value==='string'&&/^[A-Za-z0-9._~-]{16,128}$/.test(value));return value;
 }
 export const requestDigest=(value:unknown)=>sha256(canonicalJSON(value));
-export function mutationContext(actor:AuthContext,operation:string,key:string,payload:unknown):MutationContext {
- return {actor,operation,idempotency_key:validateIdempotencyKey(key),request_hash:requestDigest(payload)};
+export function mutationContext(actor:AuthContext,operation:string,key:string,payload:unknown,declared?:DeclaredAgent):MutationContext {
+ const base:MutationContext={actor,operation,idempotency_key:validateIdempotencyKey(key),request_hash:requestDigest(payload)};
+ // Self-reported provenance never enters the request hash; it must not affect idempotency identity.
+ return declared?{...base,agent:declared}:base;
 }

@@ -1,4 +1,5 @@
 import 'server-only';
+import type {DeclaredAgent} from '../../contracts/types.js';
 import {DomainError,ensure,fail} from '../../domain/errors.js';
 import {validateScalar} from '../../domain/text.js';
 
@@ -65,6 +66,25 @@ export async function boundedResponseJson(response:Response,maximum=1048576):Pro
  try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>maximum){await reader.cancel();fail('DEPENDENCY_UNAVAILABLE');}chunks.push(value);}}finally{reader.releaseLock();}
  const all=new Uint8Array(total);let at=0;for(const c of chunks){all.set(c,at);at+=c.length;}
  try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(all));}catch{fail('DEPENDENCY_UNAVAILABLE');}
+}
+const DECLARED_FIELDS=['model','harness','operator'] as const;
+/** Self-reported provenance only. Any malformed input is ignored wholesale, never a 4xx. */
+export function parseDeclaredAgent(value:string|null|undefined):DeclaredAgent|undefined{
+ if(!value)return undefined;
+ const parts=value.split(/[;,]/).map(part=>part.trim()).filter(part=>part.length>0);
+ if(parts.length===0)return undefined;
+ const result:DeclaredAgent={};
+ for(const part of parts){
+  const m=/^(model|harness|operator)\s*=\s*(?:"([^"]*)"|([^"]*))$/.exec(part);
+  if(!m)return undefined;
+  const field=m[1] as typeof DECLARED_FIELDS[number];
+  const raw=(m[2]??m[3]??'').trim();
+  if(raw.length===0||raw.length>80)return undefined;
+  if(!/^[\x20-\x7e]+$/.test(raw))return undefined; // printable ASCII only
+  if(Object.hasOwn(result,field))return undefined;
+  result[field]=raw;
+ }
+ return Object.keys(result).length>0?result:undefined;
 }
 export function validOrigin(value:string|undefined):string{
  if(!value)fail('NOT_CONFIGURED');let u:URL;try{u=new URL(value);}catch{fail('NOT_CONFIGURED');}
