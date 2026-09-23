@@ -47,8 +47,11 @@ const NAME_FONT_MIN_PX = 14;
 const NAME_FONT_MAX_PX = 38;
 /** Planet labels fade in as the star grows from this many screen pixels of radius to twice that. */
 const LABEL_FADE_START_PX = 160;
-const LABEL_MAX_PX = 192;
-const LABEL_MAX_NARROW_PX = 144;
+/** Widest a planet title may be before it is cut: grows with the star so a zoomed-in title is never cut for lack of room. */
+function labelMaxPx(starRadiusPx: number, viewportWidth: number): number {
+  const base = viewportWidth <= 850 ? 144 : 192;
+  return Math.max(base, Math.min(520, starRadiusPx * 0.45));
+}
 const LABEL_PAD_PX = 10;
 const LABEL_GAP_PX = 9;
 /** A planet's opening lines appear under its title once its star fills this many screen pixels of radius. */
@@ -220,6 +223,7 @@ export default function Universe() {
       const font = labelFontPx(starRadiusPx);
       el.style.setProperty('--label-size', `${font.toFixed(2)}px`);
       el.style.setProperty('--label-line', `${Math.round(font * 1.35)}px`);
+      el.style.setProperty('--label-max', `${Math.round(labelMaxPx(starRadiusPx, viewport.width))}px`);
       el.style.setProperty('--label-fade', Math.max(0, Math.min(1, (starRadiusPx - LABEL_FADE_START_PX * stageScale(viewport)) / (LABEL_FADE_START_PX * stageScale(viewport)))).toFixed(3));
     } else {
       const entry = categoriesRef.current.get(key);
@@ -330,7 +334,7 @@ export default function Universe() {
           const selected = selectedKeyRef.current === key;
           const lit = highlightRef.current?.itemId === itemId;
           const priority = (selected ? 1e6 : 0) + (lit ? 1e5 : 0) + (entryItem.item.node.untitled ? 0 : 10) + Math.min(r, 9);
-          const width = Math.min(estimateLabelWidth(label, font), viewport.width <= 850 ? LABEL_MAX_NARROW_PX : LABEL_MAX_PX);
+          const width = Math.min(estimateLabelWidth(label, font), labelMaxPx(starRadiusPx, viewport.width));
           const titleY = pos.y + r + LABEL_GAP_PX + lineHeight / 2;
           boxes.push({id: key, x: pos.x, y: titleY, width, height: lineHeight, priority});
           if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
