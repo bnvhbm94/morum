@@ -1,8 +1,10 @@
 /* Continuous universe explorer. Visual language borrowed from .spatial-* (black/violet, serif titles,
    Pretendard UI text, frosted search pill). No card borders, no lines between nodes: circles, dots and light only. */
 .universe-root, .site-shell > .universe-root { position: fixed; inset: 0; overflow: hidden; background: #0c0910; color: #f1ecff; touch-action: none; }
-.universe-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.universe-viewport { position: fixed; inset: 0; z-index: 1; cursor: grab; touch-action: none; transition: opacity 260ms ease; }
+.universe-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; transition: filter 320ms ease; }
+.universe-viewport { position: fixed; inset: 0; z-index: 1; cursor: grab; touch-action: none; transition: opacity 260ms ease, filter 320ms ease; }
+/* The open document is in focus; the field behind it falls just out of it. */
+.universe-root[data-reading="true"] .universe-canvas, .universe-root[data-reading="true"] .universe-viewport { filter: blur(2px); }
 .universe-viewport:active { cursor: grabbing; }
 /* While a document is open the field stays visible behind it, quiet and out of reach. */
 .universe-root[data-reading="true"] .universe-viewport { opacity: .12; pointer-events: none; }
@@ -177,7 +179,7 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
   .universe-item-title { max-width: 9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .universe-search, .universe-category-label, .universe-item-title, .universe-item-snippet, .universe-viewport, .universe-chrome { transition: none; }
+  .universe-search, .universe-category-label, .universe-item-title, .universe-item-snippet, .universe-viewport, .universe-canvas, .universe-chrome { transition: none; }
   .universe-reader { animation: none; }
   .universe-item[data-highlight="true"] .universe-item-dot { animation: none; box-shadow: 0 0 14px 5px rgb(241 236 255 / .8); }
 }
