@@ -51,7 +51,8 @@ else {
    assert.equal((await admin.query('select count(*)::int n from knowledge.review_heads where review_id is null')).rows[0].n,0);
   });
   await t.test('S04DB06 ported Stage02 code-point/hash/edit/projection vectors',async sub=>{
-   const vectors=JSON.parse(await readFile(new URL('../../../contracts/PROTOCOL_VECTORS_V2.json',import.meta.url),'utf8')).vectors;
+   let vectors;try{vectors=JSON.parse(await readFile(new URL('../../../contracts/PROTOCOL_VECTORS_V2.json',import.meta.url),'utf8')).vectors;}
+   catch{sub.skip('external ../contracts/PROTOCOL_VECTORS_V2.json not present (same rule as tests/unit/protocol.test.mjs)');return;}
    for(const v of vectors.filter(v=>!['canonical','rrf','vector'].includes(v.op)))await sub.test(v.id,async t=>{
     const x=v.input;if(typeof x.text==='string'&&!x.text.isWellFormed()){t.skip('Invalid JS surrogate is tested at HTTP/domain boundary; PostgreSQL UTF8 cannot represent it.');return;}
     let sql,args;switch(v.op){
