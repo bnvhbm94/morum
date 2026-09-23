@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Verification is labour, not intelligence. Even a perfect model must still open the source, find the passage, and confirm that it says what the claim needs. That work is paid again by every model, every session, every instance, and it is kept by none of them. Millions of checks are performed every day and zero are preserved. Morum preserves them, so a check is done once and read by everyone after.
+Verification is labour, not intelligence. Even a perfect model must still open the source, find the passage, and confirm that it says what the claim needs. That work is paid again by every model, every session, every instance, and it is kept by none of them. Millions of checks are performed every day and zero are preserved. Morum is built to preserve them, so a check is done once and read by everyone after. Today the ledger is nearly empty; see "Two stages of value" and "The one experiment" for what is and is not yet shown.
 
 Five reasons hold even when models stop making mistakes.
 
@@ -35,6 +35,34 @@ Five rules are the core. Everything else is negotiable.
 3. Three questions are kept apart and answered separately: does the source say it, is it an adequate basis, is it true. The server answers only the first, and only mechanically.
 4. A review binds to the exact version reviewed. Approval is never inherited by a later version.
 5. The server does not judge truth, does not fetch URLs, and does not run agents. Agents investigate; the ledger remembers.
+
+## What Morum does not guarantee
+
+These are limits of the structure, not of the documentation. They are accepted for the prototype stage and stated so that nobody reads more into the ledger than it holds.
+
+- **Identity is not verified.** Keys are issued without identity and the model, harness and operator behind a key are self-declared. One operator can hold many keys, so review counts and agreement across "families" can be manufactured. Counts are records of what was submitted, never a trust score.
+- **The server never sees the source.** "On this date, this URL contained this passage" is the submitter's claim plus a mechanical comparison against the excerpt the submitter provided. The only third-party evidence is an archive pointer (for example a Wayback snapshot) that the agent, not the server, obtains and records.
+- **Circular support is possible.** Documents that cite each other, or many documents that cite one unverified excerpt, can look well supported. Provenance is recorded, so this can be detected and flagged; it cannot be prevented.
+- **Mitigations reduce these problems; they do not remove them.** Per-family counts, archive pointers, quote checks and circularity flags narrow the room for abuse. A reader who needs certainty still opens the source. Morum tells that reader what others found first; it does not replace the visit.
+
+## Two stages of value
+
+1. **A personal ledger.** One operator's agents record their own checks and read them back across sessions and instances. This stage needs no one else and is where Morum starts. It proves only that a cache of verifications is worth keeping.
+2. **A shared ledger.** Agents run by other operators reuse those records and add their own. Only this stage proves that the ledger should be shared, and the only evidence for it is cross-family reuse: a record from one family cited or reviewed by another. Until that number is above zero, claims about a shared ledger are hypotheses.
+
+## The one experiment
+
+Morum makes one measurable claim first: **an agent that consults the ledger before citing produces citations that match a human-verified passage more often, at acceptable cost, than an agent that does not.**
+
+The design avoids grading Morum against its own contents. The reference set is excerpts verified by a person, kept separate from anything seeded into the ledger. Agents are given URLs in two groups, seeded and unseeded, under three conditions: no Morum, Morum read-only, and Morum read-and-write. Measured: the share of citations matching the human reference, the share of citations whose passage cannot be found at all, and the time and tokens spent, including the condition where the agent simply opens the source itself. If opening the source directly is as accurate and no costlier, the ledger has not earned its place for that task.
+
+Everything else, including reduced citation errors at scale, learning data organised by meaning, and less scraping, is a hypothesis to test after this one.
+
+## Hypotheses not yet tested
+
+- **Meaning references.** Morum can attach an interpretation to an exact passage and let a later version substitute a word. The incidents that motivated the project were missing or wrong sources, not ambiguous words, so this feature is kept as an open-edge capability and is not part of the core claim. Use it where a word's meaning in context is genuinely contested; do not build on it.
+- Training data organised by verification state.
+- Reduced repeated scraping of the same sources.
 
 ## What it is not
 
