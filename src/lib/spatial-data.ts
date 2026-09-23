@@ -1,5 +1,9 @@
 import type {
+  Anchor,
   ContentRef,
+  Evidence,
+  ObjectView,
+  Source,
   ContextPage,
   LocationRef,
   PageInfo,
@@ -10,6 +14,7 @@ import type {
   SearchRequest,
   SearchResponse,
   UnitLocator,
+  Version,
   VersionView,
 } from '../contracts/types';
 import {apiGet, apiPost, excerpt, refHref} from './api-client';
@@ -31,6 +36,8 @@ export type SpatialNode = {
   versionState: 'current' | 'historical' | 'unknown';
   score: number | null;
   syntheticDemo: boolean;
+  topic: string | null;
+  untitled: boolean;
 };
 
 export type SpatialPage = {
@@ -92,6 +99,7 @@ function makeNode(input: {
   score?: number | null;
   syntheticDemo?: boolean;
   locators?: UnitLocator[];
+  topic?: string | null;
 }): SpatialNode {
   const target = input.target;
   const snippet = input.snippet?.trim() || '';
@@ -107,6 +115,8 @@ function makeNode(input: {
     versionState: versionState(input.isCurrent ?? null),
     score: input.score ?? null,
     syntheticDemo: input.syntheticDemo ?? false,
+    topic: input.topic?.trim() || null,
+    untitled: !input.title?.trim(),
   };
 }
 
@@ -119,6 +129,7 @@ export function recordsToSpatialPage(data: Paged<RecordSummary>): SpatialPage {
       snippet: record.current.body_text,
       isCurrent: true,
       syntheticDemo: record.current.synthetic_demo,
+      topic: typeof record.current.attributes?.topic === 'string' ? record.current.attributes.topic : null,
     })),
     page: data.page,
     hasMore: Boolean(data.page.next_cursor || data.page.truncated),
@@ -151,6 +162,7 @@ export function searchHitsToSpatialNodes(hits: SearchHit[]): SpatialNode[] {
       existing.isCurrent = hit.is_current;
       existing.versionState = versionState(hit.is_current);
     }
+    if (hit.title?.trim()) existing.untitled = false;
   }
   return [...grouped.values()];
 }
@@ -327,3 +339,131 @@ export async function loadSpatialNeighbors(target: LocationRef, options?: {limit
 }
 
 export function resetSpatialSearchCache(): void { searchCache.clear(); }
+
+export type Galaxy = {key: string; topic: string | null; label: string; nodes: SpatialNode[]};
+
+export function groupGalaxies(nodes: SpatialNode[]): Galaxy[] {
+  const tagged = new Map<string, Galaxy>();
+  const order: string[] = [];
+  const untagged: SpatialNode[] = [];
+  for (const node of nodes) {
+    if (node.topic === null) { untagged.push(node); continue; }
+    const key = `topic:${node.topic}`;
+    let galaxy = tagged.get(key);
+    if (!galaxy) {
+      galaxy = {key, topic: node.topic, label: node.topic, nodes: []};
+      tagged.set(key, galaxy);
+      order.push(key);
+    }
+    galaxy.nodes.push(node);
+  }
+  const taggedGalaxies = order.map((key) => tagged.get(key)!);
+  taggedGalaxies.sort((a, b) => {
+    const diff = b.nodes.length - a.nodes.length;
+    if (diff !== 0) return diff;
+    return order.indexOf(a.key) - order.indexOf(b.key);
+  });
+  const result = [...taggedGalaxies];
+  if (untagged.length > 0) {
+    result.push({key: 'untagged', topic: null, label: '미분류', nodes: untagged});
+  }
+  return result;
+}
+
+export type MidPlacement = {node: SpatialNode; x: number; y: number; foreign: boolean; dim: boolean};
+
+export function placeGalaxy(galaxy: Galaxy, allNodes: SpatialNode[], relations: Relation[], spiral: (index: number) => {x: number; y: number}): MidPlacement[] {
+  const memberKeys = new Set(galaxy.nodes.map((node) => node.key));
+  const foreignNodes: SpatialNode[] = [];
+  for (const relation of relations) {
+    if (relation.from.kind !== 'version' || relation.to.kind !== 'version') continue;
+    const fromKey = locationKey(relation.from), toKey = locationKey(relation.to);
+    const fromInGalaxy = memberKeys.has(fromKey), toInGalaxy = memberKeys.has(toKey);
+    if (!fromInGalaxy && !toInGalaxy) continue;
+    for (const otherKey of [fromKey, toKey]) {
+      if (memberKeys.has(otherKey)) continue;
+      const foreignNode = allNodes.find((node) => node.key === otherKey);
+      if (!foreignNode) continue;
+      memberKeys.add(otherKey);
+      foreignNodes.push(foreignNode);
+    }
+  }
+  const foreignByAllOrder = allNodes.filter((node) => foreignNodes.includes(node));
+  const members = [...galaxy.nodes, ...foreignByAllOrder];
+  const memberKeySet = new Set(members.map((node) => node.key));
+  const edges = layoutEdges(relations, memberKeySet);
+
+  const dimmed = new Set<string>();
+  for (const relation of relations) {
+    if (relation.predicate !== 'corrects') continue;
+    if (relation.to.kind !== 'version') continue;
+    const toKey = locationKey(relation.to);
+    if (memberKeySet.has(toKey)) dimmed.add(toKey);
+  }
+
+  const placed = layoutNodes(members, edges, spiral);
+  const galaxyKeySet = new Set(galaxy.nodes.map((node) => node.key));
+  return placed.map((node) => ({
+    node,
+    x: node.x,
+    y: node.y,
+    foreign: !galaxyKeySet.has(node.key),
+    dim: dimmed.has(node.key),
+  }));
+}
+
+export async function loadSpatialHistory(recordId: string, signal?: AbortSignal): Promise<Version[]> {
+  const data = await apiGet<Paged<Version>>(`/records/${encodeURIComponent(recordId)}/versions?limit=20`, signal);
+  return data.items;
+}
+
+// ---- Citations for one document: every evidence that supports it (whole document or an anchored span),
+// resolved to the source it quotes. Bounded: at most CITATION_LIMIT evidence, one request per unknown object.
+export const CITATION_LIMIT = 8;
+
+export type Citation = {
+  index: number;
+  evidence: Evidence;
+  source: Source | null;
+  anchor: Anchor | null;
+  /** True when the anchor's exact text still matches the document body at the recorded code-point range. */
+  anchorMatches: boolean;
+};
+
+function codePointSlice(text: string, start: number, end: number): string {
+  return Array.from(text).slice(start, end).join('');
+}
+
+export async function loadSpatialCitations(view: VersionView, signal?: AbortSignal): Promise<Citation[]> {
+  const known = new Map<string, Evidence>(view.basis.map(item => [item.id, item]));
+  let context: ContextPage | null = null;
+  try { context = await loadSpatialContext({kind: 'version', id: view.version.id}, 1, signal); } catch { context = null; }
+  const extraIds = (context?.items ?? [])
+    .filter(item => item.target.kind === 'evidence' && !known.has(item.target.id))
+    .map(item => item.target.id);
+  const extra = await Promise.all(extraIds.slice(0, CITATION_LIMIT).map(async id => {
+    try { const object = await apiGet<ObjectView>(`/objects/evidence/${encodeURIComponent(id)}`, signal); return object.value as Evidence; }
+    catch { return null; }
+  }));
+  for (const item of extra) if (item) known.set(item.id, item);
+  const evidence = [...known.values()].slice(0, CITATION_LIMIT);
+
+  const sourceIds = new Set(evidence.flatMap(item => item.basis.kind === 'external' ? [item.basis.source_id] : []));
+  const anchorIds = new Set(evidence.flatMap(item => item.target.kind === 'anchor' ? [item.target.id] : []));
+  const [sources, anchors] = await Promise.all([
+    Promise.all([...sourceIds].map(async id => {
+      try { const object = await apiGet<ObjectView>(`/objects/source/${encodeURIComponent(id)}`, signal); return [id, object.value as Source] as const; }
+      catch { return [id, null] as const; }
+    })),
+    Promise.all([...anchorIds].map(async id => {
+      try { const object = await apiGet<ObjectView>(`/objects/anchor/${encodeURIComponent(id)}`, signal); return [id, object.value as Anchor] as const; }
+      catch { return [id, null] as const; }
+    })),
+  ]);
+  const sourceById = new Map(sources), anchorById = new Map(anchors);
+  return evidence.map((item, index) => {
+    const anchor = item.target.kind === 'anchor' ? anchorById.get(item.target.id) ?? null : null;
+    const anchorMatches = Boolean(anchor && anchor.version_id === view.version.id && codePointSlice(view.version.body_text, anchor.selector.start, anchor.selector.end) === anchor.selector.exact);
+    return {index: index + 1, evidence: item, source: item.basis.kind === 'external' ? sourceById.get(item.basis.source_id) ?? null : null, anchor, anchorMatches};
+  });
+}

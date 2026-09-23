@@ -287,57 +287,59 @@ dialog.nuanox-modal::backdrop { background: rgb(5 3 10 / .76); }
 .spatial-node:focus-visible { outline: 0; }
 .spatial-node:focus-visible .spatial-node-title { text-decoration: underline; text-underline-offset: .25em; }
 .spatial-node > span { position: relative; display: block; }
-.spatial-node > .spatial-node-title { display: -webkit-box; overflow: hidden; margin-bottom: .7rem; font-size: clamp(1.2rem, 2vw, 1.55rem); font-weight: 650; line-height: 1.28; letter-spacing: -.025em; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.spatial-node > .spatial-node-copy { display: -webkit-box; overflow: hidden; color: inherit; font-size: .92rem; line-height: 1.72; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
-.spatial-node-meta { margin-top: .85rem; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
+.spatial-node > .spatial-node-copy { display: -webkit-box; overflow: hidden; color: inherit; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: 1rem; line-height: 1.7; word-break: keep-all; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+.spatial-node[data-dim="true"] { color: color-mix(in srgb, #6f6f6f calc(var(--node-light) * 100%), #3a3a3a); }
+.spatial-node[data-foreign="true"] { opacity: .55; }
+.spatial-galaxy { --node-light: .42; -webkit-user-select: none; user-select: none; position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: min(340px, 72vw); translate: -50% -50%; border: 0; padding: 1rem; color: color-mix(in srgb, #fff calc(var(--node-light) * 100%), #4b4b4b); background: transparent; text-align: center; font: inherit; cursor: pointer; animation: spatial-node-in 240ms ease both; transition: color 120ms linear; }
+.spatial-galaxy::before { content: ""; position: absolute; inset: -.6rem -1rem; border-radius: 1.2rem; background: rgb(255 255 255 / 0); transition: background 180ms ease; }
+.spatial-galaxy:hover::before, .spatial-galaxy:focus-visible::before { background: rgb(255 255 255 / .025); }
+.spatial-galaxy:focus-visible { outline: 0; }
+.spatial-galaxy:focus-visible .spatial-galaxy-name { text-decoration: underline; text-underline-offset: .25em; }
+.spatial-galaxy > span { position: relative; display: block; }
+.spatial-galaxy-name { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: clamp(1.6rem, 3vw, 2.3rem); line-height: 1.15; letter-spacing: -.03em; }
+.spatial-galaxy-count { margin-top: .5rem; font-size: .72rem; letter-spacing: .02em; color: #6f6f6f; }
+.spatial-galaxy[data-untagged="true"] .spatial-galaxy-name { color: #8a8a8a; }
+.spatial-galaxy[data-selected="true"] { color: #fff; }
+.spatial-planet { position: absolute; left: 0; top: 0; width: min(34rem, 86vw); max-height: min(72vh, 46rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; touch-action: pan-y; translate: -50% -50%; padding: 1rem; color: #ecebee; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: 1.02rem; line-height: 1.75; cursor: auto; -webkit-user-select: text; user-select: text; animation: spatial-node-in 240ms ease both; }
+.spatial-planet-text { white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; }
+.spatial-cite { color: inherit; background: rgb(255 255 255 / .07); box-shadow: inset 0 -1px 0 rgb(255 255 255 / .35); border-radius: .15em; padding: 0 .05em; transition: background 160ms ease; }
+.spatial-cite sup { margin-left: .1em; color: #9a9a9a; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-size: .62em; line-height: 0; -webkit-user-select: none; user-select: none; }
+.spatial-planet[data-cite] .spatial-cite { background: rgb(255 255 255 / .03); }
+.spatial-planet[data-cite="1"] .spatial-cite[data-n="1"], .spatial-planet[data-cite="2"] .spatial-cite[data-n="2"], .spatial-planet[data-cite="3"] .spatial-cite[data-n="3"], .spatial-planet[data-cite="4"] .spatial-cite[data-n="4"], .spatial-planet[data-cite="5"] .spatial-cite[data-n="5"], .spatial-planet[data-cite="6"] .spatial-cite[data-n="6"], .spatial-planet[data-cite="7"] .spatial-cite[data-n="7"], .spatial-planet[data-cite="8"] .spatial-cite[data-n="8"] { background: rgb(255 255 255 / .18); }
+.spatial-cite-quote, .spatial-cite-why, .spatial-cite-where, .spatial-cite-none { display: block; }
+.spatial-cite-quote { margin-top: .3rem; color: #d9d9d9; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: .9rem; line-height: 1.55; }
+.spatial-cite-quote::before { content: "“"; } .spatial-cite-quote::after { content: "”"; }
+.spatial-cite-none { margin-top: .3rem; color: #5c5c5c; }
+.spatial-cite-why { margin-top: .3rem; color: #8a8a8a; font-size: .74rem; }
+.spatial-cite-where { margin-top: .3rem; color: #6a6a6a; font-size: .68rem; }
+.spatial-planet-links { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; margin-top: 1.4rem; font-size: .7rem; line-height: 1.5; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+.spatial-planet-links a { color: #7c7c7c; text-decoration-color: rgb(255 255 255 / .25); }
+.spatial-satellite { position: absolute; left: calc(var(--grid-x) * 430px); top: calc(var(--grid-y) * 300px); width: 16rem; translate: -50% -50%; padding: .5rem .75rem; color: #a3a3a3; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; animation: spatial-node-in 240ms ease both; }
+.spatial-satellite b { display: block; margin-bottom: .25rem; color: #6e6e6e; font-weight: 500; font-size: .66rem; letter-spacing: .06em; }
+.spatial-satellite[data-kind="version"] { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; font-size: .9rem; color: #8d8d8d; }
+.spatial-satellite[data-kind="empty"] { color: #5c5c5c; }
+.spatial-satellite a { color: inherit; }
+.spatial-satellite a:hover { color: #fff; }
+.spatial-message { position: absolute; left: 0; top: 0; width: min(38rem, calc(100vw - 3rem)); translate: -50% -50%; margin: 0; text-align: center; color: #c9c5cb; }
+.spatial-message button { margin-left: .8rem; border: 0; padding: 0; color: #ddd; background: transparent; text-decoration: underline; cursor: pointer; }
+.spatial-crumb { margin: 0; min-height: 1.2em; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; text-align: center; max-width: 100%; }
+.spatial-crumb button { border: 0; padding: 0; color: #cfcfcf; background: transparent; font: inherit; text-decoration: underline; text-underline-offset: .22em; cursor: pointer; }
 .spatial-node[data-selected="true"] { color: #fff; }
 .spatial-dock { position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); translate: -50% 0; z-index: 4; width: min(35rem, calc(100% - 2rem)); display: grid; gap: .55rem; justify-items: center; transition: translate 260ms ease, opacity 260ms ease; }
 .spatial-dock[data-hidden="true"] { translate: -50% calc(100% + 2.5rem); opacity: 0; pointer-events: none; }
-.spatial-status { margin: 0; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; text-align: center; max-width: 100%; }
-.spatial-status button { margin-left: .8rem; border: 0; padding: 0; color: #ddd; background: transparent; text-decoration: underline; cursor: pointer; }
 .spatial-search { display: flex; width: 100%; min-height: 3rem; overflow: hidden; border: 0; border-radius: 999px; background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .1), inset 0 1px 0 rgb(255 255 255 / .18), 0 .8rem 2.4rem rgb(0 0 0 / .45); backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%); }
 .spatial-search input { flex: 1; min-width: 0; border: 0; padding: 0 1.3rem; color: #fff; background: transparent; outline: 0; font: inherit; font-size: .95rem; }
 .spatial-search input::placeholder { color: #9a9a9a; }
 .spatial-search button { border: 0; padding: 0 1.3rem; color: #c4c4c4; background: transparent; font: inherit; font-size: .75rem; cursor: pointer; }
-.spatial-reader { position: fixed; z-index: 10; inset: 0; overflow: auto; overscroll-behavior: contain; color: #eae6ec; background: #050505; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", AppleMyungjo, Batang, Georgia, serif; touch-action: pan-y; animation: reader-in 300ms ease both; }
-.spatial-reader[data-direction="left"] { animation-name: reader-in-left; }
-.spatial-close { position: fixed; z-index: 12; top: max(1rem, env(safe-area-inset-top)); right: 1.1rem; width: 34px; height: 34px; border: 0; border-radius: 50%; padding: 0 0 .14rem; color: #eee; background: rgb(255 255 255 / .06); box-shadow: inset 0 10px 14px -10px rgb(255 255 255 / .4), inset 0 -8px 10px -10px rgb(255 255 255 / .08), inset 0 0 0 1px rgb(255 255 255 / .12), 0 .4rem 1.1rem rgb(0 0 0 / .45); backdrop-filter: blur(14px) saturate(160%) brightness(1.25); -webkit-backdrop-filter: blur(14px) saturate(160%) brightness(1.25); font: 300 1.45rem/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-.spatial-close::after { content: ""; position: absolute; inset: -7px; }
-.reader-slide { display: flex; overflow-x: hidden; width: 100%; }
-.reader-slide > .reader-stage { flex: 0 0 100%; min-width: 0; }
-.reader-slide[data-direction="right"] { animation: reader-slide-right 420ms cubic-bezier(.22, .61, .36, 1) both; }
-.reader-slide[data-direction="left"] { animation: reader-slide-left 420ms cubic-bezier(.22, .61, .36, 1) both; }
-@keyframes reader-slide-right { from { transform: translateX(0); } to { transform: translateX(-100%); } }
-@keyframes reader-slide-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-.reader-stage { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(24rem, 45rem) minmax(10rem, 1fr); gap: clamp(2rem, 5vw, 6rem); width: min(92rem, calc(100% - 3rem)); margin: 0 auto; padding: clamp(5rem, 10vh, 8rem) 0 7rem; align-items: start; }
-.reader-document { min-width: 0; }
-.reader-eyebrow { margin: 0 0 1.2rem; color: #888; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .7rem; letter-spacing: .08em; }
-.reader-document h2 { margin: 0 0 2.5rem; color: #fff; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.14; letter-spacing: -.045em; }
-.reader-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(1.05rem, 1.5vw, 1.22rem); line-height: 1.9; }
-.reader-links { display: flex; flex-wrap: wrap; gap: .75rem 1.3rem; margin-top: 3.5rem; padding-top: 1.2rem; border-top: 1px solid #252525; font: .75rem/1.5 ui-sans-serif, system-ui, sans-serif; }
-.reader-relations { padding-top: 4rem; font-family: ui-sans-serif, system-ui, sans-serif; }
-.reader-relations h3, .reader-context h3 { margin: 0 0 1rem; color: #737373; font-size: .67rem; font-weight: 500; letter-spacing: .06em; }
-.reader-relations button { display: block; width: 100%; border: 0; border-top: 1px solid #242424; padding: .9rem 0; color: #a7a7a7; background: transparent; text-align: left; font: inherit; font-size: .82rem; line-height: 1.5; cursor: pointer; }
-.reader-relations button:hover, .reader-relations button:focus-visible { color: #fff; }
-.reader-relations button span { display: block; margin-bottom: .3rem; color: #6f6f6f; font-size: .65rem; }
-.reader-relations p, .reader-more { color: #666; font-size: .76rem; line-height: 1.6; }
-.reader-context { display: grid; gap: .6rem; margin-top: 2.5rem; font: .76rem/1.5 ui-sans-serif, system-ui, sans-serif; }
-.reader-context a { color: #999; }
-.reader-message { width: min(38rem, calc(100% - 3rem)); margin: 30vh auto; text-align: center; }
-@keyframes reader-in { from { opacity: 0; transform: translateX(1rem); } }
-@keyframes reader-in-left { from { opacity: 0; transform: translateX(-1rem); } }
 @media (max-width: 850px) {
-  .reader-stage { display: flex; flex-direction: column; width: min(45rem, calc(100% - 2.5rem)); padding-top: 5.5rem; }
-  .reader-document { order: 1; }
-  .reader-relations { order: 2; width: 100%; padding-top: 1.5rem; }
-  .reader-relations-right { order: 3; }
-  .reader-document h2 { padding-right: 2rem; }
   .spatial-node { width: min(310px, 78vw); }
   .spatial-dock { width: calc(100% - 2rem); }
-  .spatial-status { white-space: normal; }
+  .spatial-crumb { white-space: normal; }
+  .spatial-galaxy { width: min(310px, 78vw); }
+  .spatial-satellite { width: 12rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spatial-search, .spatial-reader, .reader-slide { transition: none; animation: none; }
+  .spatial-search, .spatial-world { transition: none; animation: none; }
   .spatial-node { animation: none; transition: color 120ms linear; }
 }
 
