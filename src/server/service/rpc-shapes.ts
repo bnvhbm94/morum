@@ -108,10 +108,27 @@ export function checkUrlReport(value:unknown):void {
  const truncated=object(r.truncated);for(const field of ['sources','citations','corrections'])bool((truncated as Record<string,unknown>)[field]);
  date(r.generated_at);
 }
+/** A review's `on` ref (counterarguments.reviews / agreements.reviews element). Roadmap 2.9:
+ * an anchor-kind ref optionally carries exact/start/end; a not-yet-migrated database (pre-0113)
+ * never sends them, so all three stay optional here rather than required. */
+function reviewOnRef(value:unknown):void {
+ const o=object(value,['kind','id','exact','start','end'],['kind','id']);one(o.kind,CONTENT);uuid(o.id);
+ if(o.exact!==undefined)text(o.exact,100000,0);
+ if(o.start!==undefined)integer(o.start,0);
+ if(o.end!==undefined)integer(o.end,0);
+}
+function reviewListing(value:unknown):void {
+ for(const item of arr(value)){const r=object(item);uuid(r.id);text(r.stance,32);text(r.focus,32);reviewOnRef(r.on);}
+}
 export function checkDossier(value:unknown):void {
  const d=object(value);const v=object(d.version);uuid(v.id);uuid(v.record_id);integer(v.version_no,1);bool(v.is_current);
- arr(d.corrections);const ca=object(d.counterarguments);arr(ca.reviews);arr(ca.contradicts);object(ca.groups);
- object(d.agreements);arr(d.evidence);arr(d.premises);arr(d.meanings);arr(d.related);object(d.omitted);
+ arr(d.corrections);const ca=object(d.counterarguments);reviewListing(ca.reviews);arr(ca.contradicts);object(ca.groups);
+ const ag=object(d.agreements);
+ // Additive (roadmap 2.9): a not-yet-migrated database's kb_dossier omits reviews/truncated
+ // entirely, so both stay optional rather than required.
+ if(ag.reviews!==undefined)reviewListing(ag.reviews);
+ if(ag.truncated!==undefined)bool(ag.truncated);
+ arr(d.evidence);arr(d.premises);arr(d.meanings);arr(d.related);object(d.omitted);
  bool(d.blind);date(d.generated_at);
 }
 export function checkLocate(value:unknown):void {

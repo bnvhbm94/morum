@@ -19,30 +19,36 @@ import type * as T from '../../contracts/types.js';
  *    wider than that recommendation; this function follows the design spec's number rather
  *    than silently tightening it, and the gap is noted here rather than invented away.
  *
- * === What data this draws from, and where the design spec assumed more than exists ===
+ * === What data this draws from ===
  *
  * The design spec (docs/design/2026-09-23-claimreview-2.9.md) describes "one ClaimReview per
  * review" for stances agree/disagree/needs_review. In the actual `Dossier` shape
  * (src/contracts/types.ts, populated by kb_dossier in
- * supabase/migrations/202609200110_read_surfaces.sql):
+ * supabase/migrations/202609200110_read_surfaces.sql, extended by
+ * supabase/migrations/202609200113_dossier_agreements.sql):
  *
- *  - DATA GAP 1 (agree reviews): individual review records only exist for the
- *    disagree/needs_review stances, in `dossier.counterarguments.reviews`
- *    (`DossierCounterargument[]`). Agreeing reviews are exposed *only* as aggregate counts
- *    (`dossier.agreements.agree_keyed` / `agree_anonymous`) — no id, explanation, focus,
- *    target or created_at per agreeing review. So no individual "Supported" ClaimReview is
- *    ever emitted from real dossier data today, even though the stance table below still
- *    maps `agree` → `Supported` (for fixtures/tests, and in case the dossier one day exposes
- *    individual agree reviews). Nothing is invented to paper over this.
- *  - DATA GAP 2 (claimReviewed's "anchor exact" branch): `DossierCounterargument.on` is a bare
- *    `ContentRef` (`{kind, id}`); the Dossier never carries the anchor's resolved `exact` text
- *    anywhere. So `claimReviewed` can never take the spec's first branch ("anchor exact"); it
- *    always falls back to the version title, else the first 200 code points of the body.
+ *  - Agree reviews: individual review records for the disagree/needs_review stances live in
+ *    `dossier.counterarguments.reviews`; individual review records for the agree stance live
+ *    in `dossier.agreements.reviews` (added by 202609200113, same `DossierCounterargument[]`
+ *    element shape). Both are read here, so a real "Supported" ClaimReview is emitted whenever
+ *    a public agreeing review exists (previously only the aggregate `agree_keyed` /
+ *    `agree_anonymous` counts were available; those two fields are unchanged and still exposed
+ *    on `dossier.agreements`, just no longer the only agreement data). `agreements.reviews` may
+ *    be `undefined` when talking to a not-yet-migrated database (pre-202609200113); that is
+ *    treated as no agreeing reviews, never as an error.
+ *  - `claimReviewed`: when a review's `on` is an anchor ref carrying non-empty resolved `exact`
+ *    text (also added by 202609200113, via `knowledge.review_on_ref`), that anchor text is used
+ *    (capped at 200 code points, per the design spec's own fallback cap — see the module
+ *    comment above about the ~75-character recommendation this deliberately doesn't tighten).
+ *    Otherwise it falls back to the version title, else the first 200 code points of the body,
+ *    as before. This is per-review, not per-dossier: two reviews on the same version can now
+ *    surface different claimed text when they target different anchors.
  *  - Hidden/tombstoned exclusion: kb_dossier already filters every row through
  *    `knowledge.is_public(...)` before any of this reaches the server, and
  *    `DossierCounterargument` carries no visibility field of its own for this function to
- *    re-check. Blind dossiers (`dossier.blind`) also already arrive with an empty
- *    `counterarguments.reviews`. Both are handled by construction, not by an extra filter.
+ *    re-check. Blind dossiers (`dossier.blind`) also already arrive with both
+ *    `counterarguments.reviews` and `agreements.reviews` empty. Both are handled by
+ *    construction, not by an extra filter.
  */
 
 export interface ClaimReviewAuthor { '@type': 'Organization'; name: string; }
@@ -78,8 +84,11 @@ function authorName(actorId: string | null): string {
  if (!actorId) return 'Morum anonymous reviewer';
  return `Morum agent ${actorId.replace(/-/g, '').slice(0, 8)}`;
 }
-/** anchor.exact is never available on a Dossier review (DATA GAP 2 above); title, else body head. */
-function claimReviewedText(dossier: T.Dossier): string {
+/** Per-review claimReviewed: the anchor's resolved exact text when `on` is an anchor ref with
+ * non-empty text (202609200113); otherwise the version title, else the first 200 code points
+ * of the body. */
+function claimReviewedFor(review: T.DossierCounterargument, dossier: T.Dossier): string {
+ if (review.on.kind === 'anchor' && review.on.exact) return capCodePoints(review.on.exact, 200);
  if (dossier.version.title) return dossier.version.title;
  return capCodePoints(dossier.version.body_text, 200);
 }
@@ -96,12 +105,14 @@ export function publicOrigin(requestOrigin: string): string {
  return /(^|\.)vercel\.app$/i.test(host) ? CANONICAL_ORIGIN : requestOrigin;
 }
 
-/** Pure, deterministic ClaimReview JSON-LD for a Dossier's public, non-quality-signal reviews. */
+/** Pure, deterministic ClaimReview JSON-LD for a Dossier's public, non-quality-signal reviews.
+ * Draws from both `counterarguments.reviews` (disagree/needs_review) and `agreements.reviews`
+ * (agree, 202609200113; absent on a not-yet-migrated database, treated as empty). */
 export function renderClaimReviews(dossier: T.Dossier, origin: string): ClaimReviewJsonLd[] {
  const versionUrl = `${origin}/versions/${dossier.version.id}`;
- const claimReviewed = claimReviewedText(dossier);
  const out: ClaimReviewJsonLd[] = [];
- for (const review of dossier.counterarguments.reviews) {
+ const allReviews = [...dossier.counterarguments.reviews, ...(dossier.agreements.reviews ?? [])];
+ for (const review of allReviews) {
   if (!EMITTED_FOCUS.has(review.focus)) continue;
   if (!EMITTED_TARGET_KIND.has(review.on.kind)) continue;
   out.push({
@@ -110,7 +121,7 @@ export function renderClaimReviews(dossier: T.Dossier, origin: string): ClaimRev
    url: `${versionUrl}#review-${review.id}`,
    datePublished: review.created_at,
    author: { '@type': 'Organization', name: authorName(review.created_by) },
-   claimReviewed,
+   claimReviewed: claimReviewedFor(review, dossier),
    itemReviewed: { '@type': 'Claim', appearance: { '@type': 'CreativeWork', url: versionUrl } },
    reviewRating: {
     '@type': 'Rating',

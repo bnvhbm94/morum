@@ -98,6 +98,47 @@ else {
    assert.equal(blindView.counterarguments.groups.keyed_actors,1);assert.equal(blindView.counterarguments.groups.anonymous_reviews,1);
   });
 
+  await t.test('kb_dossier (2.9/0113): agreements.reviews carries individual agree reviews with anchor exact/start/end; a version-kind on stays bare; blind hides the listing but keeps counts/truncated',async()=>{
+   const agentB=await h.enroll('SYNTHETIC agreements reviewer');
+   const target=record('SYNTHETIC agreements dossier target body with enough length for an anchor');
+   const tv=(await mutate(a,'record.create',target,anon)).data.version;
+   const start=Array.from(tv.body_text).indexOf('a'),selector=canonicalSelector(tv.body_text,start,start+1);
+   const anchor=(await mutate(a,'anchor.create',{version_id:tv.id,body_sha256:tv.body_sha256,selector},anon)).data;
+
+   const agreeAnchorCmd={target:ref('anchor',anchor.id),stance:'agree',focus:'content',explanation:'SYNTHETIC anchor agreement',previous_review_id:null,basis:[]};
+   const anonAgree=(await mutate(a,'review.create',agreeAnchorCmd,anon)).data;
+   await mutate(a,'review.create',{...agreeAnchorCmd,explanation:'SYNTHETIC keyed anchor agreement'},agentB.actor);
+   const disagreeAnchorCmd={target:ref('anchor',anchor.id),stance:'disagree',focus:'content',explanation:'SYNTHETIC anchor disagreement',previous_review_id:null,basis:[]};
+   const anonDisagreeOnAnchor=(await mutate(a,'review.create',disagreeAnchorCmd,anon)).data;
+   const disagreeVersionCmd={target:ref('version',tv.id),stance:'disagree',focus:'content',explanation:'SYNTHETIC version disagreement',previous_review_id:null,basis:[]};
+   await mutate(a,'review.create',disagreeVersionCmd,anon);
+
+   const dossier=await rpc(a,'kb_dossier',{p_query:{target:ref('version',tv.id)}});
+   assert.equal(dossier.agreements.agree_keyed,1);assert.equal(dossier.agreements.agree_anonymous,1);
+   assert.equal(dossier.agreements.reviews.length,2);
+   assert.ok(dossier.agreements.reviews.every(rv=>rv.stance==='agree'));
+   assert.equal(typeof dossier.agreements.truncated,'boolean');assert.equal(dossier.agreements.truncated,false);
+   const anchoredAgree=dossier.agreements.reviews.find(rv=>rv.id===anonAgree.id);
+   assert.ok(anchoredAgree);
+   assert.deepEqual(Object.keys(anchoredAgree).sort(),['created_at','created_by','declared','explanation','focus','id','on','stance'].sort());
+   assert.equal(anchoredAgree.on.kind,'anchor');assert.equal(anchoredAgree.on.id,anchor.id);
+   assert.equal(anchoredAgree.on.exact,'a');assert.equal(anchoredAgree.on.start,start);assert.equal(anchoredAgree.on.end,start+1);
+
+   // The same anchor-ref enrichment applies to counterarguments.reviews' 'on' field.
+   const anchoredDisagree=dossier.counterarguments.reviews.find(rv=>rv.id===anonDisagreeOnAnchor.id);
+   assert.ok(anchoredDisagree);assert.equal(anchoredDisagree.on.kind,'anchor');
+   assert.equal(anchoredDisagree.on.exact,'a');assert.equal(anchoredDisagree.on.start,start);assert.equal(anchoredDisagree.on.end,start+1);
+   // A version-kind 'on' ref is unchanged: no exact/start/end keys at all.
+   const versionDisagree=dossier.counterarguments.reviews.find(rv=>rv.on.kind==='version');
+   assert.ok(versionDisagree);assert.equal(Object.hasOwn(versionDisagree.on,'exact'),false);
+   assert.equal(Object.hasOwn(versionDisagree.on,'start'),false);assert.equal(Object.hasOwn(versionDisagree.on,'end'),false);
+
+   const blindView=await rpc(a,'kb_dossier',{p_query:{target:ref('version',tv.id),blind:true}});
+   assert.deepEqual(blindView.agreements.reviews,[]);
+   assert.equal(blindView.agreements.agree_keyed,1);assert.equal(blindView.agreements.agree_anonymous,1);
+   assert.equal(blindView.agreements.truncated,false);
+  });
+
   await t.test('kb_attention: quote_not_found ranks before unreviewed, reasons filter, counts, seed determinism',async()=>{
    const src=(await mutate(a,'source.create',{url:null,title:null,submitted_text:'Sample submitted text for attention.',published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:true},anon)).data;
    const tv=(await mutate(a,'record.create',record('SYNTHETIC attention target'),anon)).data.version;

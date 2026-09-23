@@ -24,7 +24,7 @@ function fakeDossier(overrides={}){
   version:{id,record_id:randomUUID(),version_no:3,title:'A long title',is_current:true,current_version_id:id,version_count:3,parent_version_id:null,created_at:now(),created_by:null,attributes:{},synthetic_demo:false,body_sha256:'a'.repeat(64),body_text:'x'.repeat(5000)},
   corrections:[],
   counterarguments:{reviews:[],contradicts:[],groups:{keyed_actors:0,anonymous_reviews:0,declared_model_families:0}},
-  agreements:{agree_keyed:0,agree_anonymous:0},
+  agreements:{agree_keyed:0,agree_anonymous:0,reviews:[],truncated:false},
   evidence:[],
   premises:[],
   meanings:[],
@@ -103,6 +103,22 @@ test('dossier json claim_reviews author is anonymous when the review has no crea
  const body=await r.json();
  assert.equal(body.data.claim_reviews[0].author.name,'Morum anonymous reviewer');
  assert.equal(body.data.claim_reviews[0].reviewRating.alternateName,'Needs review');
+});
+test('dossier json includes a Supported claim_review from agreements.reviews, with anchor exact as claimReviewed',async()=>{
+ const reviewId=randomUUID();
+ const dossier=fakeDossier({agreements:{agree_keyed:1,agree_anonymous:0,reviews:[
+  {id:reviewId,stance:'agree',focus:'content',on:{kind:'anchor',id:randomUUID(),exact:'the anchored claim text',start:10,end:34},created_by:randomUUID(),created_at:now(),declared:null,explanation:'Synthetic agreement'},
+ ],truncated:false}});
+ const s=setup({kb_dossier:()=>dossier});
+ const r=await s.handle(s.req(`/dossier?target_kind=version&target_id=${id}`,'GET',undefined,{auth:false}));
+ assert.equal(r.status,200);
+ const body=await r.json();
+ assert.equal(body.data.claim_reviews.length,1);
+ assert.equal(body.data.claim_reviews[0].url,`http://localhost/versions/${id}#review-${reviewId}`);
+ assert.equal(body.data.claim_reviews[0].reviewRating.alternateName,'Supported');
+ assert.equal(body.data.claim_reviews[0].claimReviewed,'the anchored claim text');
+ assert.deepEqual(body.data.agreements.reviews,dossier.agreements.reviews);
+ assert.equal(body.data.agreements.truncated,false);
 });
 
 // --- /attention ---

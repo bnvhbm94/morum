@@ -16,7 +16,7 @@ function dossier(overrides = {}) {
   },
   corrections: [],
   counterarguments: {reviews: [], contradicts: [], groups: {keyed_actors: 0, anonymous_reviews: 0, declared_model_families: 0}},
-  agreements: {agree_keyed: 0, agree_anonymous: 0},
+  agreements: {agree_keyed: 0, agree_anonymous: 0, reviews: [], truncated: false},
   evidence: [], premises: [], meanings: [], related: [],
   omitted: {corrections: 0, counterarguments: 0, contradicts: 0, evidence: 0, premises: 0, meanings: 0, related: 0},
   blind: false, generated_at: '2026-09-23T00:00:00Z',
@@ -125,6 +125,69 @@ test('blind dossiers already arrive with an empty reviews list, so nothing is em
 
 test('a dossier with no counterargument reviews emits nothing', () => {
  assert.deepEqual(renderClaimReviews(dossier(), ORIGIN), []);
+});
+
+// --- agreements.reviews (roadmap 2.9, migration 202609200113) ---
+
+test('Supported ClaimReviews are emitted from agreements.reviews, with the same focus/target filters as counterarguments', () => {
+ const d = dossier({agreements: {agree_keyed: 2, agree_anonymous: 0, truncated: false, reviews: [
+  review({id: 'a1', stance: 'agree', focus: 'content'}),
+  review({id: 'a2', stance: 'agree', focus: 'evidence_support'}),
+  review({id: 'a3', stance: 'agree', focus: 'quote_match'}),
+  review({id: 'a4', stance: 'agree', focus: 'meaning'}),
+  review({id: 'a5', stance: 'agree', on: {kind: 'relation', id: 'ffffffff-0000-4000-8000-000000000006'}}),
+ ]}});
+ const out = renderClaimReviews(d, ORIGIN);
+ assert.deepEqual(out.map(x => x.url.split('#review-')[1]), ['a1', 'a2']);
+ assert.deepEqual(out.map(x => x.reviewRating.alternateName), ['Supported', 'Supported']);
+});
+
+test('agreements.reviews entries are appended after counterarguments.reviews entries', () => {
+ const d = dossier({
+  counterarguments: {reviews: [review({id: 'c1', stance: 'disagree'})], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}},
+  agreements: {agree_keyed: 1, agree_anonymous: 0, truncated: false, reviews: [review({id: 'a1', stance: 'agree'})]},
+ });
+ const out = renderClaimReviews(d, ORIGIN);
+ assert.deepEqual(out.map(x => x.url.split('#review-')[1]), ['c1', 'a1']);
+});
+
+test('a dossier from a not-yet-migrated database (agreements.reviews absent) emits only counterargument reviews, without crashing', () => {
+ const d = dossier({
+  counterarguments: {reviews: [review({id: 'c1', stance: 'disagree'})], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}},
+  agreements: {agree_keyed: 1, agree_anonymous: 0},
+ });
+ const out = renderClaimReviews(d, ORIGIN);
+ assert.deepEqual(out.map(x => x.url.split('#review-')[1]), ['c1']);
+});
+
+test('claimReviewed uses the anchor exact text when the target is an anchor ref with resolved text', () => {
+ const d = dossier({counterarguments: {reviews: [
+  review({id: 'r1', on: {kind: 'anchor', id: 'eeeeeeee-0000-4000-8000-000000000005', exact: 'the specific anchored claim', start: 5, end: 33}}),
+ ], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}}});
+ const out = renderClaimReviews(d, ORIGIN);
+ assert.equal(out[0].claimReviewed, 'the specific anchored claim');
+});
+
+test('claimReviewed falls back to title when the anchor ref has no exact text (empty string or absent)', () => {
+ const emptyExact = dossier({counterarguments: {reviews: [
+  review({id: 'r1', on: {kind: 'anchor', id: 'eeeeeeee-0000-4000-8000-000000000005', exact: '', start: 5, end: 5}}),
+ ], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}}});
+ assert.equal(renderClaimReviews(emptyExact, ORIGIN)[0].claimReviewed, 'A synthetic claim title');
+
+ const noExact = dossier({counterarguments: {reviews: [
+  review({id: 'r1', on: {kind: 'anchor', id: 'eeeeeeee-0000-4000-8000-000000000005'}}),
+ ], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}}});
+ assert.equal(renderClaimReviews(noExact, ORIGIN)[0].claimReviewed, 'A synthetic claim title');
+});
+
+test('claimReviewed caps anchor exact text at 200 code points', () => {
+ const longExact = '가'.repeat(250);
+ const d = dossier({counterarguments: {reviews: [
+  review({id: 'r1', on: {kind: 'anchor', id: 'eeeeeeee-0000-4000-8000-000000000005', exact: longExact, start: 0, end: 250}}),
+ ], contradicts: [], groups: {keyed_actors: 1, anonymous_reviews: 0, declared_model_families: 0}}});
+ const claimReviewed = renderClaimReviews(d, ORIGIN)[0].claimReviewed;
+ assert.equal(Array.from(claimReviewed).length, 200);
+ assert.equal(claimReviewed, Array.from(longExact).slice(0, 200).join(''));
 });
 
 test('publicOrigin collapses any *.vercel.app preview host to the canonical origin', () => {

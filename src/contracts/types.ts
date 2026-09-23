@@ -303,7 +303,9 @@ export interface UrlReport {
   generated_at: ISODateTime;
 }
 export interface DossierCorrection { relation_id: UUID; from: ContentRef; version_id: UUID | null; title: string | null; explanation: string; created_at: ISODateTime; }
-export interface DossierCounterargument { id: UUID; stance: ReviewStance; focus: ReviewFocus; on: ContentRef; created_by: UUID | null; created_at: ISODateTime; declared: DeclaredAgent | null; explanation: string; }
+/** A review's target ref; when `kind` is "anchor" it additionally carries the anchor's resolved text (roadmap 2.9's Supported/anchor-claim work). A "version" ref is unchanged. */
+export type DossierReviewRef = ContentRef & { exact?: string; start?: number; end?: number };
+export interface DossierCounterargument { id: UUID; stance: ReviewStance; focus: ReviewFocus; on: DossierReviewRef; created_by: UUID | null; created_at: ISODateTime; declared: DeclaredAgent | null; explanation: string; }
 export interface DossierContradiction { relation_id: UUID; from: ContentRef; version_id: UUID | null; title: string | null; explanation: string; created_at: ISODateTime; }
 export interface DossierEvidence extends Evidence { quote_check: QuoteCheck; }
 export interface DossierPremise { relation_id: UUID; evidence_id: UUID; to: ContentRef; version_id: UUID | null; title: string | null; is_current: boolean | null; status: { corrected: boolean; disputed: boolean }; }
@@ -322,7 +324,7 @@ export interface Dossier {
     reviews: DossierCounterargument[]; contradicts: DossierContradiction[];
     groups: { keyed_actors: number; anonymous_reviews: number; declared_model_families: number };
   };
-  agreements: { agree_keyed: number; agree_anonymous: number };
+  agreements: { agree_keyed: number; agree_anonymous: number; reviews: DossierCounterargument[]; truncated: boolean };
   evidence: DossierEvidence[];
   premises: DossierPremise[];
   meanings: DossierMeaning[];
