@@ -1,6 +1,7 @@
 import type {SpatialNode, SpatialPage} from './spatial-data';
 import {groupGalaxies, loadSpatialHome} from './spatial-data';
 import type {UniverseCategory, UniverseItem, UniverseSource} from '../components/universe/types';
+import {parseAppearance} from '../components/universe/appearance';
 
 export function topicLayoutSeed(key: string): number {
   let hash = 2166136261;
@@ -126,7 +127,7 @@ export function createTreeSource(roots: TreeCategory[]): UniverseSource {
       snippet: item.snippet ?? '',
       href: `/versions/${encodeURIComponent(item.id)}`,
       versionId: item.id,
-      node: {key: `version:${item.id}`, target, locator: null, locators: [], title: item.title, snippet: item.snippet ?? '', href: `/versions/${encodeURIComponent(item.id)}`, isCurrent: true, versionState: 'current', score: null, syntheticDemo: false, topic: categoryId, untitled: !item.title, duplicateOf: null, role: item.star ? 'star' : null, createdAt: null, reviewCount: null},
+      node: {key: `version:${item.id}`, target, locator: null, locators: [], title: item.title, snippet: item.snippet ?? '', href: `/versions/${encodeURIComponent(item.id)}`, isCurrent: true, versionState: 'current', score: null, syntheticDemo: false, topic: categoryId, untitled: !item.title, duplicateOf: null, role: item.star ? 'star' : null, createdAt: null, reviewCount: null, appearance: parseAppearance(null)},
     };
   };
 

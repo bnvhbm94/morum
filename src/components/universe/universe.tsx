@@ -16,6 +16,7 @@ import {makeStarfield, paintStarfield, drawCategoryPoint, drawCategoryParticles,
 import {bodyKind, starCircle, CENTER_HOLE, type BodyKind} from './celestial';
 import {estimateLabelWidth, resolveLabels, type LabelBox} from './labels';
 import UniverseReader, {readerTargetKey, relationLabel, type ReaderNeighbor, type ReaderTarget} from './reader';
+import {hueHex} from './appearance';
 import './universe.css';
 
 type CategoryEntry = {category: UniverseCategory; circle: Circle; parentId: string | null; kind: BodyKind; star: Circle};
@@ -59,8 +60,11 @@ const DOT_PX = 3;
 /** A far star shows its name below its cluster once the cluster is this many pixels across. */
 const NAME_FAR_MIN_PX = 5;
 const EDGE_PX = 6;
-/** The search pill and crumb occupy the bottom of the screen; labels stop above them. */
-const CHROME_PX = 120;
+/** The search pill and crumb occupy the bottom of the screen; labels stop above them. Fallback before the
+ * chrome's real height is measured (B §4: replaces the old fixed 120px, which cut off once the intro
+ * paragraph grew the chrome past it). */
+const CHROME_PX_FALLBACK = 120;
+const CHROME_MEASURE_MARGIN_PX = 12;
 
 /** Below a far star's cluster the name hangs under it; on an open star it sits at the centre. */
 function nameOffsetPx(stage: Stage, radiusPx: number, nameFont: number): number {
@@ -68,8 +72,8 @@ function nameOffsetPx(stage: Stage, radiusPx: number, nameFont: number): number 
   return stage === 'nebula' ? Math.min(28, Math.max(10, radiusPx * 0.4)) + 6 + nameFont * 0.65 : 0;
 }
 
-function insideViewport(x: number, y: number, width: number, height: number, viewport: Viewport): boolean {
-  return x - width / 2 >= EDGE_PX && x + width / 2 <= viewport.width - EDGE_PX && y - height / 2 >= EDGE_PX && y + height / 2 <= viewport.height - CHROME_PX;
+function insideViewport(x: number, y: number, width: number, height: number, viewport: Viewport, chromePx: number): boolean {
+  return x - width / 2 >= EDGE_PX && x + width / 2 <= viewport.width - EDGE_PX && y - height / 2 >= EDGE_PX && y + height / 2 <= viewport.height - chromePx;
 }
 /** A planet's opening lines appear under its title once its star fills this many screen pixels of radius. */
 const SNIPPET_STAR_PX = 720;
@@ -109,6 +113,9 @@ function flightMs(from: Camera, to: Camera): number {
 export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chromeRef = useRef<HTMLDivElement>(null);
+  /** The bottom chrome's real height + margin (B §4), replacing the old fixed 120px label keep-out. */
+  const chromeHeightRef = useRef(CHROME_PX_FALLBACK);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const buttonElsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
   const selectedKeyRef = useRef<string | null>(null);
@@ -244,6 +251,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (related) el.dataset.related = related; else delete el.dataset.related;
       const star = categoriesRef.current.get(categoryId);
       const starRadiusPx = star ? screenRadius(star.star, camera) : 0;
+      // Colour is keyed to the parent star's on-screen stage, not the (fixed 6px) dot size, and shares the
+      // same fade range as the planet label (B §5): it mixes in from the star's own --label-fade below.
+      if (entry) el.style.setProperty('--planet-hue-color', hueHex(entry.item.node.appearance.hue));
       const font = labelFontPx(starRadiusPx);
       el.style.setProperty('--label-size', `${font.toFixed(2)}px`);
       el.style.setProperty('--label-line', `${Math.round(font * 1.35)}px`);
@@ -351,7 +361,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
           const nameY = namePos.y + nameOffsetPx(stage, radiusPx, nameFont);
           const nameWidth = far ? estimateLabelWidth(entry.category.label, nameFont) : Math.min(estimateLabelWidth(entry.category.label, nameFont), starRadiusPx * 0.68);
           const nameHeight = nameFont * 1.3;
-          if (!far || insideViewport(namePos.x, nameY, nameWidth, nameHeight, viewport)) {
+          if (!far || insideViewport(namePos.x, nameY, nameWidth, nameHeight, viewport, chromeHeightRef.current)) {
             boxes.push({id: `name:${id}`, x: namePos.x, y: nameY, width: nameWidth, height: nameHeight, priority: far ? 1e6 + entry.category.mass : 2e6});
           }
         }
@@ -389,11 +399,11 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
           const height = lineHeight * lines;
           const titleY = pos.y + DOT_PX + LABEL_GAP_PX + height / 2;
           // A title that would be cut by the screen edge or sit on another planet stays hidden until the view moves.
-          if (!selected && (!insideViewport(pos.x, titleY, width, height, viewport) || !clearOfDots(itemId, pos.x, titleY, width, height))) continue;
+          if (!selected && (!insideViewport(pos.x, titleY, width, height, viewport, chromeHeightRef.current) || !clearOfDots(itemId, pos.x, titleY, width, height))) continue;
           boxes.push({id: key, x: pos.x, y: titleY, width, height, priority});
           if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
             const snippetY = titleY + height / 2 + 4 + SNIPPET_BOX.height / 2;
-            if (insideViewport(pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport) && clearOfDots(itemId, pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
+            if (insideViewport(pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport, chromeHeightRef.current) && clearOfDots(itemId, pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
               boxes.push({id: `${key}#s`, x: pos.x, y: snippetY, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
           }
         }
@@ -888,6 +898,14 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(container);
 
+    // B §4: the label keep-out follows the chrome's actual measured height (it grows when the intro
+    // paragraph is showing) instead of a fixed guess.
+    const chromeObserver = new ResizeObserver(entries => {
+      const height = entries[0]?.contentRect.height;
+      if (height) { chromeHeightRef.current = Math.round(height) + CHROME_MEASURE_MARGIN_PX; schedulePaint(); }
+    });
+    if (chromeRef.current) chromeObserver.observe(chromeRef.current);
+
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       if (readerRef.current) return;
@@ -981,6 +999,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       mountedRef.current = false;
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
+      chromeObserver.disconnect();
       narrowQuery.removeEventListener('change', onNarrowChange);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('popstate', onPopState);
@@ -1173,7 +1192,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         <UniverseReader target={reader} reducedMotion={reducedMotionRef.current}
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
-      <div className="universe-chrome">
+      <div ref={chromeRef} className="universe-chrome">
         <p className="universe-crumb" aria-live="polite" data-hidden={reader !== null}
           data-hint={!notFound && !crumbText}>{notFound ? '찾지 못했다' : crumbText || (alwaysVisible ? narrowHint : desktopHint)}</p>
         <div className="universe-search" data-hidden={dockHidden}>

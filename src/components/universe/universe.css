@@ -15,11 +15,13 @@
   position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; border-radius: 50%;
   background: transparent; cursor: pointer; -webkit-user-select: none; user-select: none;
 }
-.universe-item:focus-visible { outline: 1px solid rgb(255 255 255 / .5); outline-offset: 2px; }
+/* B §6.1: selection and keyboard focus never borrow the reserved ring (relation) or glow (review support)
+   channels. A planet shows it in its title — full opacity, white, underlined — same as a star already did
+   through its name; the dot itself never changes shape or shadow for either state. */
+.universe-item:focus-visible { outline: 0; }
 /* Keyboard focus on a body shows as its name lighting up, not as a ring around a whole star. */
 .universe-category:focus-visible { outline: 0; }
 .universe-category:focus-visible .universe-category-label { opacity: 1; color: #fff; }
-.universe-item[data-selected="true"] { outline: 1px solid rgb(255 255 255 / .35); outline-offset: 2px; }
 /* A selected body brightens its name rather than drawing a ring around itself. */
 .universe-category[data-selected="true"] .universe-category-label { opacity: 1; color: #fff; }
 .universe-category[data-open="true"] { cursor: default; }
@@ -52,14 +54,13 @@
 
 .universe-item-dot {
   position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 6px; height: 6px; border-radius: 50%;
-  background: #f1ecff; box-shadow: 0 0 6px rgb(241 236 255 / .55); pointer-events: none;
-}
-.universe-item[data-selected="true"] .universe-item-dot { box-shadow: 0 0 10px 2px rgb(241 236 255 / .8); }
-.universe-item[data-highlight="true"] .universe-item-dot { animation: universe-glow 1.6s ease; }
-@keyframes universe-glow {
-  0% { box-shadow: 0 0 2px rgb(241 236 255 / .2); }
-  35% { box-shadow: 0 0 22px 8px rgb(241 236 255 / .9); }
-  100% { box-shadow: 0 0 6px rgb(241 236 255 / .55); }
+  /* B §5: fill defaults to #dfdbea (L 0.90), the same fixed lightness as every named hue, so a decorated
+     planet never reads darker (less review support) than an undecorated one. Colour is keyed to the parent
+     star's on-screen stage via --label-fade (set alongside the planet label, not by the fixed 6px dot size),
+     mixing in from --planet-hue-color as the star crosses the same 160px-320px band the label fades over. */
+  background: color-mix(in oklch, #dfdbea, var(--planet-hue-color, #dfdbea) calc(var(--label-fade, 1) * 100%));
+  /* Glow stays the plain review-support channel: #f1ecff regardless of hue, and unchanged by selection (B §6.1). */
+  box-shadow: 0 0 6px rgb(241 236 255 / .55); pointer-events: none;
 }
 /* A declared relation to the open or selected document: a faint ring and the predicate word. Nothing is drawn between the two. */
 .universe-item[data-related]::before {
@@ -90,14 +91,24 @@
 .universe-item[data-detail="title"] .universe-item-title,
 .universe-item[data-detail="snippet"] .universe-item-title { opacity: var(--label-fade, 1); }
 .universe-item[data-selected="true"] .universe-item-title,
+.universe-item[data-highlight="true"] .universe-item-title,
 .universe-item:hover .universe-item-title,
 .universe-item:focus-visible .universe-item-title { opacity: 1; }
+/* Selection, keyboard focus and a search hit all read the same way: the title stays lit, white, underlined.
+   No ring, no extra glow (B §6.1) — the search hit used to flash the dot's glow; now it holds the title lit
+   for the same HIGHLIGHT_MS instead. */
+.universe-item[data-selected="true"] .universe-item-title,
+.universe-item[data-highlight="true"] .universe-item-title,
+.universe-item:focus-visible .universe-item-title {
+  color: #fff; text-decoration: underline; text-decoration-color: rgb(255 255 255 / .6); text-underline-offset: .25em;
+}
 .universe-item[data-detail="snippet"] .universe-item-snippet { opacity: var(--label-fade, 1); }
 
 /* ---- Reader: a document read in place over the field ---------------------------------------------------- */
 .universe-reader {
   position: fixed; inset: 0; z-index: 3; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
-  padding: max(1.25rem, env(safe-area-inset-top)) 16px max(6rem, env(safe-area-inset-bottom)); cursor: default;
+  /* B §4: room for the fixed close circle at the bottom on phones, and only as much top inset as the notch needs. */
+  padding: max(8px, env(safe-area-inset-top)) 16px calc(88px + env(safe-area-inset-bottom)); cursor: default;
   animation: universe-reader-in 240ms ease both;
 }
 .universe-reader::-webkit-scrollbar { display: none; }
@@ -107,7 +118,24 @@
   display: flex; align-items: baseline; gap: 1rem; margin: 0; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
 }
-.universe-reader-close { border: 0; padding: 0; color: #cfcfcf; background: transparent; font: inherit; text-decoration: underline; text-underline-offset: .22em; cursor: pointer; }
+/* B §4: a 44×44 hit area without changing the crumb's visual baseline — extra padding is offset by a matching negative margin. */
+.universe-reader-close {
+  display: inline-flex; align-items: center; min-height: 44px; margin-left: -12px; padding: 0 12px;
+  border: 0; color: #cfcfcf; background: transparent; font: inherit; text-decoration: underline; text-underline-offset: .22em; cursor: pointer;
+}
+/* B §4: under 700px, a fixed circle beside the search pill's own material so a long document can be closed
+   without scrolling back to the top crumb. Hidden at/above 700px, where the top crumb is always in reach. */
+.universe-reader-close-float {
+  display: none; position: fixed; right: 16px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 12px); z-index: 5;
+  width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgb(255 255 255 / .05);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .1), inset 0 1px 0 rgb(255 255 255 / .18), 0 .8rem 2.4rem rgb(0 0 0 / .45);
+  backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+  color: #f1ecff; font: inherit; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif; font-size: 12px;
+}
+@media (max-width: 699.98px) {
+  .universe-reader-close-float { display: flex; align-items: center; justify-content: center; }
+}
 .universe-reader-note { margin: 3rem 0; color: #c9c5cb; text-align: center; }
 .universe-reader-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; width: 100%; max-width: 74rem; justify-items: center; align-items: start; }
 /* On one column the document comes first; its satellites follow underneath. */
@@ -127,7 +155,8 @@
   position: relative; color: inherit; background: transparent;
   text-decoration: underline dotted rgb(241 236 255 / .55); text-underline-offset: .18em; text-decoration-thickness: 1px;
 }
-.universe-meaning:hover::after, .universe-meaning:focus-visible::after {
+/* B §4: also on plain :focus, since a tap on iOS Safari does not always qualify as :focus-visible. */
+.universe-meaning:hover::after, .universe-meaning:focus::after, .universe-meaning:focus-visible::after {
   content: attr(data-meaning); position: absolute; left: 0; bottom: calc(100% + .35rem); z-index: 2;
   background: #0c0910; color: #f1ecff; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
   font-size: .72rem; padding: .25rem .5rem; border-radius: .3rem; box-shadow: 0 6px 18px rgb(0 0 0 / .5);
@@ -135,9 +164,26 @@
 }
 .universe-meaning:focus-visible { outline: 0; }
 .universe-doc-links { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; margin-top: 1.4rem; font-size: .7rem; line-height: 1.5; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif; }
-.universe-doc-links a { color: #7c7c7c; text-decoration-color: rgb(255 255 255 / .25); }
+.universe-doc-links a { color: #8a8496; text-decoration-color: rgb(255 255 255 / .25); }
 ::highlight(reading-paragraph) { background-color: rgb(255 255 255 / .13); color: #fff; }
 ::highlight(reading-paragraph-fading) { background-color: rgb(255 255 255 / .06); }
+
+/* Planet portrait (B §5): the 20px disc above the reader title. Texture lives only here — the field's dot is
+   too small (6px, fixed) to show grain or bands without borrowing the size/mass channel. Drawn only when
+   attributes.appearance is actually set; an unset document shows no disc at all, not a default-coloured one. */
+.universe-portrait { position: relative; display: block; width: 20px; height: 20px; margin-bottom: 10px; border-radius: 50%; overflow: hidden; background: var(--portrait-hue, #dfdbea); }
+/* Three bands, L 0.87 / 0.93 / 0.87: the base circle is the darker edge colour, the middle third overlaid
+   lighter (no gradient — a plain rectangle clipped by the circle's own overflow:hidden). */
+.universe-portrait-bands { background: color-mix(in oklch, var(--portrait-hue, #dfdbea) 100%, black 3%); }
+.universe-portrait-bands::before {
+  content: ""; position: absolute; left: 0; top: 33%; width: 100%; height: 34%;
+  background: color-mix(in oklch, var(--portrait-hue, #dfdbea) 100%, white 3%);
+}
+/* L wobbles ±0.03 around the mean with a deterministic per-pixel noise filter (no CSS gradient function). */
+.universe-portrait-grain::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
 
 .universe-satellites { display: grid; gap: 1.1rem; width: min(34rem, 100%); align-content: start; }
 .universe-satellite {
@@ -147,17 +193,17 @@
 }
 button.universe-satellite { cursor: pointer; }
 button.universe-satellite:hover, button.universe-satellite:focus-visible { background: rgb(255 255 255 / .035); color: #d6d6d6; outline: 0; }
-.universe-satellite b { display: block; margin-bottom: .25rem; color: #6e6e6e; font-weight: 500; font-size: .66rem; letter-spacing: .06em; }
+.universe-satellite b { display: block; margin-bottom: .25rem; color: #8a8496; font-weight: 500; font-size: .66rem; letter-spacing: .06em; }
 .universe-satellite[data-kind="version"] { font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif; font-size: .9rem; color: #8d8d8d; }
-.universe-satellite[data-kind="empty"] { color: #5c5c5c; }
+.universe-satellite[data-kind="empty"] { color: #8a8496; }
 .universe-satellite a { color: inherit; }
 .universe-satellite a:hover { color: #fff; }
 .universe-cite-quote, .universe-cite-why, .universe-cite-where, .universe-cite-none { display: block; }
 .universe-cite-quote { margin-top: .3rem; color: #d9d9d9; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif; font-size: .9rem; line-height: 1.55; }
 .universe-cite-quote::before { content: "“"; } .universe-cite-quote::after { content: "”"; }
-.universe-cite-none { margin-top: .3rem; color: #5c5c5c; }
+.universe-cite-none { margin-top: .3rem; color: #8a8496; }
 .universe-cite-why { margin-top: .3rem; color: #8a8a8a; font-size: .74rem; }
-.universe-cite-where { margin-top: .3rem; color: #6a6a6a; font-size: .68rem; }
+.universe-cite-where { margin-top: .3rem; color: #8a8496; font-size: .68rem; }
 
 /* Quote-check line (1.9 §4 / B §2.1): worded against the submitted excerpt, never "원문". Colour separates
    only compared vs not-compared, never right vs wrong — found_* and not_found share the same colour. */
@@ -191,7 +237,9 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
 
 /* ---- Chrome ------------------------------------------------------------------------------------------------ */
 .universe-chrome {
-  position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); translate: -50% 0; z-index: 4;
+  position: fixed; left: 50%; translate: -50% 0; z-index: 4;
+  /* B §4: 24px above the home indicator on a notchless phone, 46px on one with a home bar. */
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 12px);
   width: min(35rem, calc(100% - 2rem)); display: grid; gap: .55rem; justify-items: center; pointer-events: none;
   transition: opacity 260ms ease;
 }
@@ -201,10 +249,10 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
   transition: opacity 260ms ease;
 }
 .universe-crumb[data-hidden="true"] { opacity: 0; }
-.universe-crumb[data-hint="true"] { color: #5f5b68; }
-/* Desktop's default hint ("검색 / · 항성 두 번 눌러 들어가기 · 행성 두 번 눌러 읽기"), shown while the pill stays docked-hidden. */
-@media (min-width: 850px) and (pointer: fine) {
-  .universe-crumb[data-hint="true"] { color: #8a8496; font-size: 12px; }
+/* B §4: 5.5:1 against #0c0910 (the previous #5f5b68 hint colour was 3.0:1); the hint crumb also caps at two lines. */
+.universe-crumb[data-hint="true"] {
+  color: #8a8496; font-size: 12px; line-height: 1.5; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .universe-search {
   pointer-events: auto; display: flex; width: 100%; min-height: 3rem; overflow: hidden; border: 0; border-radius: 999px;
@@ -223,9 +271,16 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
   .universe-item-snippet { max-width: 70vw; }
   /* B §4: 16px keeps iOS Safari from zooming the page on focus; the pill itself already meets 48px height. */
   .universe-search input { font-size: 16px; }
+  /* B §4: the tooltip is unreadable clipped by the viewport edge on a narrow phone. */
+  .universe-meaning:hover::after, .universe-meaning:focus::after, .universe-meaning:focus-visible::after { max-width: calc(100vw - 32px); }
+}
+@media (max-width: 479.98px) {
+  /* B §4: the satellite's own inner left padding used to start 12px right of the body text, reading as a
+     second left rule; below 480px it is dropped so the two columns share one start line. */
+  .universe-satellite { padding: .5rem 0; }
+  .universe-satellites { gap: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .universe-search, .universe-category-label, .universe-item-title, .universe-item-snippet, .universe-viewport, .universe-canvas, .universe-chrome { transition: none; }
   .universe-reader { animation: none; }
-  .universe-item[data-highlight="true"] .universe-item-dot { animation: none; box-shadow: 0 0 14px 5px rgb(241 236 255 / .8); }
 }

@@ -3,13 +3,14 @@
 // The document view inside the universe: a planet's record or a star's description, read in place over the
 // field. Same reading experience as the home explorer (title, Up/Down through paragraphs with a fading mark,
 // Space to page), and the same satellites: earlier versions, evidence, declared relations, reviews.
-import {Fragment, useEffect, useRef, useState, type ReactNode} from 'react';
+import {Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 import type {ContentRef, Dossier, QuoteCheckState, Version, VersionView} from '../../contracts/types';
 import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
 import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
 import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES} from '../reading-spans';
+import {hueHex, parseAppearance} from './appearance';
 
 export type ReaderTarget =
   | {kind: 'doc'; versionId: string; role: 'planet' | 'star'; categoryId: string; categoryLabel: string; planetCount: number}
@@ -117,6 +118,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           <button type="button" className="universe-reader-close" onClick={onClose}>닫기</button>
           <span>{crumb}</span>
         </p>
+        {/* B §4: under 700px a thumb can reach a fixed circle without scrolling back to the top crumb. */}
+        <button type="button" className="universe-reader-close-float" onClick={onClose} aria-label="닫기">닫기</button>
         {target.kind === 'star-missing' && (
           <article ref={articleRef} className="universe-doc" tabIndex={-1} aria-labelledby="universe-doc-title">
             <h2 className="universe-doc-title" id="universe-doc-title">{target.categoryLabel}</h2>
@@ -129,6 +132,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           <div className="universe-reader-grid">
             <aside className="universe-satellites" data-side="left" aria-label="이력과 근거">{leftSatellites(loaded, onOpenVersion)}</aside>
             <article ref={articleRef} className="universe-doc" tabIndex={-1} aria-labelledby="universe-doc-title">
+              {portrait(loaded.view.version.attributes)}
               {loaded.view.version.title
                 ? <h2 className="universe-doc-title" id="universe-doc-title">{loaded.view.version.title}</h2>
                 : <h2 className="universe-sr-only" id="universe-doc-title">제목 없는 기록</h2>}
@@ -283,6 +287,15 @@ function reviewTable(dossier: Dossier | null): ReactNode {
       )}
     </div>
   );
+}
+
+// ---- Planet portrait (B §5): a 20px disc above the title, the open document's own `attributes.appearance`
+// (not the field's — a reader shows the판 that is actually open). Texture lives only here: the field's 6px
+// dot is too small to show grain or bands without borrowing the size (mass) channel.
+function portrait(attributes: Version['attributes']): ReactNode {
+  const appearance = parseAppearance(attributes);
+  if (!appearance.present) return null;
+  return <span className={`universe-portrait universe-portrait-${appearance.texture}`} style={{'--portrait-hue': hueHex(appearance.hue)} as CSSProperties} aria-hidden="true" />;
 }
 
 function truncateExact(text: string): string {

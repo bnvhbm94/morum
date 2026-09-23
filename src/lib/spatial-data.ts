@@ -20,6 +20,7 @@ import type {
   VersionView,
 } from '../contracts/types';
 import {apiGet, apiPost, excerpt, refHref} from './api-client';
+import {parseAppearance, type Appearance} from '../components/universe/appearance';
 
 export const SPATIAL_LIMIT = 20;
 export const SPATIAL_RELATION_DISPLAY_LIMIT = 4;
@@ -48,6 +49,8 @@ export type SpatialNode = {
   createdAt: string | null;
   /** agree + disagree + needs_review from review_summary, when known (for orbit placement). */
   reviewCount: number | null;
+  /** attributes.appearance {hue, texture} of the record's current version (1.9 §5 / B §5), parsed with fallback. */
+  appearance: Appearance;
 };
 
 export type SpatialPage = {
@@ -114,6 +117,7 @@ function makeNode(input: {
   role?: string | null;
   createdAt?: string | null;
   reviewCount?: number | null;
+  appearance?: Appearance;
 }): SpatialNode {
   const target = input.target;
   const snippet = input.snippet?.trim() || '';
@@ -135,6 +139,7 @@ function makeNode(input: {
     role: input.role === 'star' ? 'star' : null,
     createdAt: input.createdAt ?? null,
     reviewCount: input.reviewCount ?? null,
+    appearance: input.appearance ?? parseAppearance(null),
   };
 }
 
@@ -154,6 +159,7 @@ export function recordsToSpatialPage(data: Paged<RecordSummary>): SpatialPage {
       reviewCount: record.review_summary
         ? record.review_summary.agree + record.review_summary.disagree + record.review_summary.needs_review
         : null,
+      appearance: parseAppearance(record.current.attributes),
     })),
     page: data.page,
     hasMore: Boolean(data.page.next_cursor || data.page.truncated),
