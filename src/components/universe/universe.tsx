@@ -120,6 +120,8 @@ export default function Universe() {
   const zoomAnchorRef = useRef({x: 0, y: 0});
   const velocityRef = useRef({x: 0, y: 0});
   const pointerRef = useRef<PointerState | null>(null);
+  /** Where the mouse is over the field, so a star's name can swell a little as the pointer comes near it. */
+  const hoverRef = useRef<{x: number; y: number} | null>(null);
   const activePointersRef = useRef<Set<number>>(new Set());
   const pinchRef = useRef<PinchState | null>(null);
   const suppressClickRef = useRef(false);
@@ -226,7 +228,20 @@ export default function Universe() {
       el.dataset.stage = entry ? stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, stageScale(viewport)) : 'nebula';
       el.dataset.kind = entry?.kind ?? 'empty';
       el.dataset.open = entry && entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport)) ? 'true' : 'false';
-      if (entry) el.style.setProperty('--name-size', `${nameFontPx(screenRadius(entry.star, camera)).toFixed(2)}px`);
+      if (entry) {
+        const starRadiusPx = screenRadius(entry.star, camera);
+        el.style.setProperty('--name-size', `${nameFontPx(starRadiusPx).toFixed(2)}px`);
+        // Within about a star's radius of the pointer, the name grows smoothly by up to a third.
+        const hover = hoverRef.current;
+        let boost = 1;
+        if (hover) {
+          const centre = worldToScreen(camera, viewport, entry.star);
+          const reach = Math.max(120, starRadiusPx);
+          const t = Math.max(0, 1 - Math.hypot(hover.x - centre.x, hover.y - centre.y) / reach);
+          boost = 1 + 0.33 * t * t * (3 - 2 * t);
+        }
+        el.style.setProperty('--name-boost', boost.toFixed(3));
+      }
     }
   }
 
@@ -888,6 +903,11 @@ export default function Universe() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      hoverRef.current = {x: event.clientX - rect.left, y: event.clientY - rect.top};
+      schedulePaint();
+    }
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
     const now = performance.now();
@@ -1030,6 +1050,7 @@ export default function Universe() {
       <div ref={containerRef} className="universe-viewport" tabIndex={-1} aria-hidden={reader !== null}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={event => finishPointer(event)} onPointerCancel={event => finishPointer(event, true)}
+        onPointerLeave={() => { hoverRef.current = null; schedulePaint(); }}
         onDoubleClick={onDoubleClick}>
         {domCategoryIds.map(renderCategoryButton)}
         {domItemKeys.map(renderItemButton)}
