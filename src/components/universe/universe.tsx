@@ -51,6 +51,7 @@ const SNIPPET_STAR_PX = 720;
 const SNIPPET_BOX = {width: 224, height: 44};
 const UNTITLED_LABEL_CHARS = 28;
 const KEY_ZOOM = 1.35;
+const SHOW_STARFIELD = false;
 const DOUBLE_CLICK_ZOOM = 2.4;
 const WHEEL_STEP = 0.0018;
 const WHEEL_MAX_LOG = 0.7;
@@ -256,7 +257,8 @@ export default function Universe() {
     const dim = reading ? 0.22 : 1;
 
     ctx.clearRect(0, 0, viewport.width, viewport.height);
-    paintStarfield(ctx, starsRef.current, camera, viewport, reading ? 0.3 : 1);
+    // Decorative starlight is off for now (2026-09-23): it was barely visible and only added motion behind the data.
+    if (SHOW_STARFIELD) paintStarfield(ctx, starsRef.current, camera, viewport, reading ? 0.3 : 1);
 
     const catNodes: {id: string; radiusPx: number}[] = [];
     const itemNodes: {key: string; radiusPx: number}[] = [];
