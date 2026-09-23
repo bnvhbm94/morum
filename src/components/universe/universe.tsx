@@ -231,12 +231,12 @@ export default function Universe() {
       if (entry) {
         const starRadiusPx = screenRadius(entry.star, camera);
         el.style.setProperty('--name-size', `${nameFontPx(starRadiusPx).toFixed(2)}px`);
-        // Within about a star's radius of the pointer, the name grows smoothly by up to a third.
+        // Near the name itself (not anywhere inside a big open star) the name grows smoothly by up to a third.
         const hover = hoverRef.current;
         let boost = 1;
         if (hover) {
           const centre = worldToScreen(camera, viewport, entry.star);
-          const reach = Math.max(120, starRadiusPx);
+          const reach = Math.max(80, Math.min(200, starRadiusPx * 0.4));
           const t = Math.max(0, 1 - Math.hypot(hover.x - centre.x, hover.y - centre.y) / reach);
           boost = 1 + 0.33 * t * t * (3 - 2 * t);
         }
