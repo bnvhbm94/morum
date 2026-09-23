@@ -223,7 +223,9 @@ export default function Universe() {
       const font = labelFontPx(starRadiusPx);
       el.style.setProperty('--label-size', `${font.toFixed(2)}px`);
       el.style.setProperty('--label-line', `${Math.round(font * 1.35)}px`);
-      el.style.setProperty('--label-max', `${Math.round(labelMaxPx(starRadiusPx, viewport.width))}px`);
+      const maxWidth = labelMaxPx(starRadiusPx, viewport.width);
+      el.style.setProperty('--label-max', `${Math.round(maxWidth)}px`);
+      el.style.setProperty('--label-lines', entry && estimateLabelWidth(itemLabel(entry.item), font) > maxWidth ? '2' : '1');
       el.style.setProperty('--label-fade', Math.max(0, Math.min(1, (starRadiusPx - LABEL_FADE_START_PX * stageScale(viewport)) / (LABEL_FADE_START_PX * stageScale(viewport)))).toFixed(3));
     } else {
       const entry = categoriesRef.current.get(key);
@@ -334,11 +336,16 @@ export default function Universe() {
           const selected = selectedKeyRef.current === key;
           const lit = highlightRef.current?.itemId === itemId;
           const priority = (selected ? 1e6 : 0) + (lit ? 1e5 : 0) + (entryItem.item.node.untitled ? 0 : 10) + Math.min(r, 9);
-          const width = Math.min(estimateLabelWidth(label, font), labelMaxPx(starRadiusPx, viewport.width));
-          const titleY = pos.y + r + LABEL_GAP_PX + lineHeight / 2;
-          boxes.push({id: key, x: pos.x, y: titleY, width, height: lineHeight, priority});
+          // A long title wraps onto a second line rather than being cut; its box grows to match.
+          const maxWidth = labelMaxPx(starRadiusPx, viewport.width);
+          const fullWidth = estimateLabelWidth(label, font);
+          const lines = fullWidth > maxWidth ? 2 : 1;
+          const width = Math.min(fullWidth, maxWidth);
+          const height = lineHeight * lines;
+          const titleY = pos.y + r + LABEL_GAP_PX + height / 2;
+          boxes.push({id: key, x: pos.x, y: titleY, width, height, priority});
           if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
-            boxes.push({id: `${key}#s`, x: pos.x, y: titleY + lineHeight / 2 + 4 + SNIPPET_BOX.height / 2, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
+            boxes.push({id: `${key}#s`, x: pos.x, y: titleY + height / 2 + 4 + SNIPPET_BOX.height / 2, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
           }
         }
       }

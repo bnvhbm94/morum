@@ -68,13 +68,14 @@
   color: #f1ecff; text-align: center; transition: opacity 200ms ease;
 }
 .universe-item-title {
-  top: calc(50% + 9px); width: max-content; max-width: var(--label-max, 12rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  top: calc(50% + 9px); width: max-content; max-width: var(--label-max, 12rem); overflow: hidden; word-break: keep-all;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
   font-size: var(--label-size, .84rem); line-height: var(--label-line, 18px);
   text-shadow: 0 0 4px #0c0910, 0 0 10px rgb(12 9 16 / .9);
 }
 .universe-item-snippet {
-  top: calc(50% + 13px + var(--label-line, 18px)); width: 14rem; max-width: 60vw; color: #c9c3d6;
+  top: calc(50% + 13px + var(--label-line, 18px) * var(--label-lines, 1)); width: 14rem; max-width: 60vw; color: #c9c3d6;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
   font-size: .74rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   text-shadow: 0 0 4px #0c0910, 0 0 10px rgb(12 9 16 / .9);
