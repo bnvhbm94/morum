@@ -10,7 +10,10 @@ export const capabilities:Handler=async ({url,services:s,respond})=>{
  queryParams(url,[]);const state=await s.db.call<T.Health>('kb_health',{});ensure(state?.contract_version===CONTRACT_VERSION&&state.database==='reachable'&&state.status==='ok','NOT_CONFIGURED');
  const available=s.embeddings.availability()===null;
  const result:T.Capabilities={contract_version:CONTRACT_VERSION,authentication:{mode:'open_contribution',human_login:false,owner_claim:false,registration_required:false,credentials_required:false,agent_registration:s.auth.registrationEnabled,anonymous_reviews:'append_only'},content:{default_format:'plain_text',markdown_required:false,raw_text_post:true},search:{semantic_enabled:available,profile_id:available?PROFILE:null,quality_gate:'not_evaluated'},limits:{write_bytes:1048576,body_code_points:100000,search_limit:20},features:['url_report','dossier','attention','work_requests','declared_agent']};
- return respond(result);
+ const response=respond(result);
+ // RFC 9727 section 3: the API root discovers the catalog via this Link relation (roadmap 1.6).
+ response.headers.set('Link','</.well-known/api-catalog>; rel="api-catalog"');
+ return response;
 };
 
 /**
