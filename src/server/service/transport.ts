@@ -2,6 +2,7 @@ import 'server-only';
 import type {DeclaredAgent} from '../../contracts/types.js';
 import {DomainError,ensure,fail} from '../../domain/errors.js';
 import {validateScalar} from '../../domain/text.js';
+import {validateIdempotencyKey} from '../../domain/idempotency.js';
 
 /** Transport status is separate from domain validation (422). */
 export class HttpError extends DomainError {
@@ -51,6 +52,8 @@ export async function readRecordBody(request:Request):Promise<unknown>{
  if(/^text\/plain(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i.test(contentType(request)))return {body_text:await readUtf8(request)};
  return readJson(request);
 }
+/** Shared by every write handler: same idempotency-key header parsing as before the registry split. */
+export function readIdempotencyKey(request:Request):string{return validateIdempotencyKey(request.headers.get('idempotency-key'));}
 export function queryParams(url:URL,allowed:readonly string[]):Record<string,string>{
  const result:Record<string,string>=Object.create(null);
  for(const [key,value] of url.searchParams){if(!allowed.includes(key)||Object.hasOwn(result,key))throw new HttpError('VALIDATION_FAILED',400);validateScalar(value);result[key]=value;}

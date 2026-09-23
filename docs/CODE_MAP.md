@@ -17,14 +17,23 @@ Use this as a lookup index. Verify names and behavior in current source; paths b
 | Evidence | `src/contracts/types.ts` (`Evidence`), `src/components/version-reader.tsx`, `src/server/db/knowledge-repository.ts` | Version basis plus paged evidence; external/internal/reasoning bases. |
 | Reviews | `src/contracts/types.ts` (`Review`, `ReviewSummary`), `src/components/version-reader.tsx`, `src/server/service/auth.ts` | Review display/count semantics and agent-only review-head authentication. |
 | Sources | `src/app/sources/[sourceId]/page.tsx`, `src/components/object-reader.tsx`, `src/contracts/types.ts` | Submitted source metadata/text and original URL links. |
-| Public route inventory | `src/server/service/routes.ts` | Active `/api/v2` methods and response names; route presence does not prove runtime deployment. |
-| HTTP boundary | `src/app/api/v2/[...path]/route.ts`, `src/server/service/http.ts` | Request parsing, dispatch, response envelope, auth/error boundary. |
+| Public route inventory | `src/server/service/routes.ts` (`RouteEntry`, `ROUTES`) | Active `/api/v2` methods, auth mode, response type name, summary, allowed query params and (for mutate POSTs) `command`; route presence does not prove runtime deployment. |
+| HTTP boundary | `src/app/api/v2/[...path]/route.ts`, `src/server/service/http.ts`, `src/server/service/handlers/` | Request parsing, `HANDLERS` registry dispatch, response envelope, auth/error boundary. Handler bodies live in `handlers/{system,agents,retrieval,surfaces,reads,admin,mutations}.ts`, keyed `${method} ${path}` in `handlers/index.ts`. |
 | Auth | `src/server/service/auth.ts`, `src/server/service/factory.ts`, `src/domain/permissions.ts` | `nuanox_` credential parsing, HMAC domain separation, agent context and mutation permission. |
 | DB adapter/RPC | `src/server/db/knowledge-repository.ts`, `src/server/db/client.ts`, `supabase/migrations/` | Repository reads/writes, cursors, RPC names, schema and visibility rules. |
 | Shared domain rules | `src/domain/validation.ts`, `src/domain/relations.ts`, `src/domain/versions.ts`, `src/domain/evidence.ts`, `src/domain/reviews.ts` | Input validation and append-only/version/relation/evidence/review invariants. |
 | Static/UI tests | `tests/static/*.test.mjs` | Route presence, reader safety, spatial UI conventions, schema/source checks. |
 | Service/unit tests | `tests/service/*.test.mjs`, `tests/unit/*.test.mjs`, `tests/server/*.test.mjs` | Retrieval, transport/client, domain, galaxy layout (`tests/unit/spatial-layout.test.mjs`), repository/auth boundary behavior. Cases that need sibling repos (`../tools`, `../contracts`, `../skills`, `../tests`) skip when those are absent. |
 | DB/HTTP integration | `tests/db/*.test.mjs`, `tests/http/*.test.mjs`, `DB_TESTING.md`, `LOCAL_INTEGRATION.md` | Disposable Postgres and loopback HTTP contract checks; require configured services. |
+
+## Adding a route
+
+1. Add a `RouteEntry` to `ROUTES` in `src/server/service/routes.ts`: method, path, `auth`, `response` type name, a one-sentence `summary`, the exact `query` list the handler will pass to `queryParams`, and `command` if it goes through the generic mutate handler.
+2. Add the handler function in the fitting `src/server/service/handlers/*.ts` module (or a new module for a new concern), typed `Handler` from `handlers/index.ts`.
+3. Register it in `HANDLERS` in `src/server/service/handlers/index.ts`, keyed `'${method} ${path}'` exactly as written in the route entry.
+4. Run `npm run -s test:static` and `npm run -s test:service`; `tests/static/route-registry.test.mjs` checks the ROUTES/HANDLERS pairing, `command` scope and summary format.
+5. Regenerate `public/agent/api-routes.json` with `npm run -s contracts:generate`.
+6. If the route is agent-facing, document it in `public/skill.md`.
 
 ## Narrow lookup commands
 
