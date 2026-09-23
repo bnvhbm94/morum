@@ -29,12 +29,12 @@
   position: absolute; top: 50%; left: 50%; translate: -50% -50%; max-width: 34%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
   color: #f1ecff; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
-  font-size: calc(var(--name-size, 1rem) * var(--name-boost, 1)); letter-spacing: -.01em; text-align: center; transition: font-size 140ms ease, opacity 160ms ease;
+  font-size: var(--name-size, 1rem); letter-spacing: -.01em; text-align: center;
   /* Map-style halo: a tight dark outline from offset shadows, then a soft glow; the stars behind are dimmed, not hidden. */
   text-shadow: 1px 0 #0c0910, -1px 0 #0c0910, 0 1px #0c0910, 0 -1px #0c0910,
     1px 1px #0c0910, -1px 1px #0c0910, 1px -1px #0c0910, -1px -1px #0c0910,
     0 0 6px #0c0910, 0 0 14px rgb(12 9 16 / .8);
-  opacity: 0;
+  opacity: 0; transition: opacity 160ms ease;
 }
 .universe-category[data-stage="open"] .universe-category-label,
 .universe-category[data-stage="items"] .universe-category-label,
