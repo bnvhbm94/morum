@@ -912,19 +912,29 @@ export default function Universe() {
     glideTo({...target, scale: clampScale(target.scale)}, null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Centre a body on screen at the current zoom, so a first tap only brings it closer and never opens anything. */
+  function centreOn(circle: Circle): void {
+    glideTo({...cameraRef.current, x: circle.x, y: circle.y}, null);
+  }
+
   const onCategoryClick = useCallback((id: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     if (suppressClickRef.current) return;
     const entry = categoriesRef.current.get(id);
     if (!entry) return;
+    const wasSelected = selectedKeyRef.current === id;
     select(id);
     const camera = cameraRef.current, viewport = viewportRef.current;
     const open = entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport));
     if (open) {
-      // Inside an open star, its name at the centre opens the description; the rest of the field re-centres.
+      // Inside an open star, its name at the centre is the description: one tap selects it, a second (or a double tap) opens it.
       const field = containerRef.current?.getBoundingClientRect() ?? {left: 0, top: 0};
       const centre = worldToScreen(camera, viewport, entry.star);
       const distance = Math.hypot(event.clientX - field.left - centre.x, event.clientY - field.top - centre.y);
-      if (distance <= screenRadius(entry.star, camera) * ORBIT_INNER) { void openStar(id); return; }
+      if (distance <= screenRadius(entry.star, camera) * ORBIT_INNER) {
+        if (wasSelected || event.detail >= 2) void openStar(id);
+        else centreOn(entry.star);
+        return;
+      }
       if (event.detail >= 2) return;
       flyTo(entry.star, id);
       return;
@@ -932,8 +942,16 @@ export default function Universe() {
     flyTo(entry.circle, id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onItemClick = useCallback((item: UniverseItem, categoryId: string) => {
+  const onItemClick = useCallback((item: UniverseItem, categoryId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     if (suppressClickRef.current) return;
+    const key = itemKey(categoryId, item.id);
+    // First tap: select and centre the planet (its title shows). Second tap, double tap or Enter: read it.
+    if (selectedKeyRef.current !== key && event.detail < 2) {
+      select(key);
+      const circle = itemCirclesRef.current.get(categoryId)?.get(item.id)?.circle;
+      if (circle) centreOn(circle);
+      return;
+    }
     openItem(item, categoryId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -962,7 +980,7 @@ export default function Universe() {
     if (!entry) return null;
     return (
       <button key={key} type="button" className="universe-item" aria-label={itemLabel(entry.item) || '기록'}
-        ref={el => bindButton(key, el)} onClick={() => onItemClick(entry.item, categoryId)} onFocus={() => select(key)}>
+        ref={el => bindButton(key, el)} onClick={event => onItemClick(entry.item, categoryId, event)} onFocus={() => select(key)}>
         <span className="universe-item-dot" aria-hidden="true" />
         <span className="universe-item-title">{itemLabel(entry.item)}</span>
         {!entry.item.node.untitled && <span className="universe-item-snippet">{entry.item.snippet}</span>}
