@@ -3,12 +3,13 @@
 // The document view inside the universe: a planet's record or a star's description, read in place over the
 // field. Same reading experience as the home explorer (title, Up/Down through paragraphs with a fading mark,
 // Space to page), and the same satellites: earlier versions, evidence, declared relations, reviews.
-import {useEffect, useRef, useState, type ReactNode} from 'react';
-import type {ContentRef, Version, VersionView} from '../../contracts/types';
-import {loadSpatialCitations, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
+import {Fragment, useEffect, useRef, useState, type ReactNode} from 'react';
+import type {ContentRef, Dossier, QuoteCheckState, Version, VersionView} from '../../contracts/types';
+import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
 import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
+import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES} from '../reading-spans';
 
 export type ReaderTarget =
   | {kind: 'doc'; versionId: string; role: 'planet' | 'star'; categoryId: string; categoryLabel: string; planetCount: number}
@@ -16,7 +17,7 @@ export type ReaderTarget =
 
 export type ReaderNeighbor = {versionId: string; predicate: string};
 
-type Loaded = {view: VersionView; citations: Citation[]; meanings: Meaning[]; history: Version[]; neighbors: SpatialNeighbor[]; hasMoreNeighbors: boolean};
+type Loaded = {view: VersionView; citations: Citation[]; meanings: Meaning[]; history: Version[]; neighbors: SpatialNeighbor[]; hasMoreNeighbors: boolean; dossier: Dossier | null};
 
 const RELATION_LABEL: Record<string, string> = {supports: '지지', corrects: '정정', depends_on: '의존', derived_from: '파생', contradicts: '반론', defines: '정의', related_to: '관련', same_meaning_as: '같은 의미', translation_of: '번역'};
 export function relationLabel(predicate: string): string { return RELATION_LABEL[predicate] || predicate; }
@@ -60,13 +61,14 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           loadSpatialNeighbors(ref, {displayLimit: 12}, controller.signal).catch(() => ({items: [] as SpatialNeighbor[], hasMore: false})),
         ]);
         if (controller.signal.aborted) return;
-        const [history, citations, meanings] = await Promise.all([
+        const [history, citations, meanings, dossier] = await Promise.all([
           loadSpatialHistory(view.version.record_id, controller.signal).catch(() => [] as Version[]),
           loadSpatialCitations(view, controller.signal).catch(() => [] as Citation[]),
           loadSpatialMeanings(view, controller.signal).catch(() => [] as Meaning[]),
+          loadSpatialDossier(target.versionId, controller.signal).catch(() => null as Dossier | null),
         ]);
         if (controller.signal.aborted) return;
-        setLoaded({view, citations, meanings, history, neighbors: neighborResult.items, hasMoreNeighbors: neighborResult.hasMore});
+        setLoaded({view, citations, meanings, history, neighbors: neighborResult.items, hasMoreNeighbors: neighborResult.hasMore, dossier});
         setLoading(false);
         onNeighbors(neighborResult.items.flatMap(item => item.node.target.kind === 'version' ? [{versionId: item.node.target.id, predicate: item.relation.predicate}] : []));
         requestAnimationFrame(() => articleRef.current?.focus({preventScroll: true}));
@@ -137,7 +139,10 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
                 <a href={`/records/${encodeURIComponent(loaded.view.version.record_id)}/history`}>이력</a>
               </nav>
             </article>
-            <aside className="universe-satellites" data-side="right" aria-label="관계와 검토">{rightSatellites(loaded, onOpenVersion)}</aside>
+            <aside className="universe-satellites" data-side="right" aria-label="관계와 검토">
+              {reviewTable(loaded.dossier)}
+              {rightSatellites(loaded, onOpenVersion)}
+            </aside>
           </div>
         )}
       </div>
@@ -154,11 +159,20 @@ function satellite(key: string, kind: string, caption: string, body: ReactNode, 
     : <div key={key} className="universe-satellite" data-kind={kind}>{content}</div>;
 }
 
+// ---- Quote-check line (B §2.1): what the server's mechanical comparison found, worded against the
+// contributor's submitted excerpt — never "원문" (the server never opens the source page). Colour separates
+// only compared vs not-compared; found_* and not_found share the same colour, since the line never says
+// right or wrong. Text table lives in reading-spans.ts (pure, unit-tested).
+function quoteCheckLine(state: QuoteCheckState | undefined): ReactNode {
+  const entry = state ? QUOTE_CHECK_TEXT[state] : null;
+  if (!entry) return null;
+  return <span className="universe-cite-check" data-compared={entry.compared}><b className="universe-cite-check-label">인용 대조</b> · {entry.text}</span>;
+}
+
 function leftSatellites(loaded: Loaded, open: (versionId: string) => void): ReactNode[] {
-  const out: ReactNode[] = [];
-  for (const version of loaded.history.filter(version => version.id !== loaded.view.version.id)) {
-    out.push(satellite(`v-${version.id}`, 'version', `이전 버전 v${version.version_no}`, version.title || '제목 없는 기록', () => open(version.id)));
-  }
+  const quoteCheckById = new Map((loaded.dossier?.evidence ?? []).map(item => [item.id, item.quote_check.state]));
+  const evidenceItems: ReactNode[] = [];
+  let hasExternal = false;
   for (const citation of loaded.citations) {
     const {evidence, source, anchor, anchorMatches} = citation;
     const basis = evidence.basis;
@@ -167,19 +181,38 @@ function leftSatellites(loaded: Loaded, open: (versionId: string) => void): Reac
       ? (anchorMatches ? <span className="universe-cite-where">본문 구간 “{anchor.selector.exact}”</span> : <span className="universe-cite-where">본문 구간이 현재 본문과 맞지 않음</span>)
       : <span className="universe-cite-where">문서 전체</span>;
     if (basis.kind === 'external') {
+      hasExternal = true;
       const label = source?.title?.trim() || (source?.url ? hostOf(source.url) : '출처 보기');
-      out.push(satellite(`e-${evidence.id}`, 'evidence', caption, <><a href={`/sources/${encodeURIComponent(basis.source_id)}`}>{label}</a>{basis.quote ? <q className="universe-cite-quote">{basis.quote}</q> : <span className="universe-cite-none">인용문 없음</span>}<span className="universe-cite-why">{basis.explanation}</span>{where}</>));
+      evidenceItems.push(satellite(`e-${evidence.id}`, 'evidence', caption, <>
+        <a href={`/sources/${encodeURIComponent(basis.source_id)}`}>{label}</a>
+        {basis.quote ? <q className="universe-cite-quote">{basis.quote}</q> : <span className="universe-cite-none">인용문 없음</span>}
+        {quoteCheckLine(quoteCheckById.get(evidence.id))}
+        <span className="universe-cite-why">{basis.explanation}</span>
+        {where}
+      </>));
     } else if (basis.kind === 'internal') {
-      out.push(satellite(`e-${evidence.id}`, 'evidence', caption, <><span className="universe-cite-why">{basis.explanation}</span>{where}</>, basis.source.kind === 'version' ? () => open(basis.source.id) : undefined));
+      evidenceItems.push(satellite(`e-${evidence.id}`, 'evidence', caption, <><span className="universe-cite-why">{basis.explanation}</span>{where}</>, basis.source.kind === 'version' ? () => open(basis.source.id) : undefined));
     } else {
-      out.push(satellite(`e-${evidence.id}`, 'evidence', caption, <><span className="universe-cite-why">{basis.explanation}</span>{where}</>));
+      evidenceItems.push(satellite(`e-${evidence.id}`, 'evidence', caption, <><span className="universe-cite-why">{basis.explanation}</span>{where}</>));
     }
   }
-  for (const neighbor of loaded.neighbors.filter(item => item.side === 'left')) {
-    out.push(satellite(`r-${neighbor.relation.id}`, 'relation', relationLabel(neighbor.relation.predicate), neighbor.node.title, neighbor.node.target.kind === 'version' ? () => open(neighbor.node.target.id) : undefined));
+  if (hasExternal) {
+    evidenceItems.push(
+      <p key="cite-note" className="universe-cite-note">인용 대조는 제출된 발췌와 인용문을 글자로 맞춰 본 결과입니다. 서버는 출처 주소를 열지 않고, 내용이 참인지 판단하지 않습니다.</p>
+    );
   }
-  if (!out.length) out.push(satellite('empty', 'empty', '', '첨부된 근거 없음'));
-  return cap(out, false, loaded.view.version.id);
+
+  // Earlier versions and declared relations, capped; evidence (above) is never counted against the cap (B §2.1).
+  const rest: ReactNode[] = [];
+  for (const version of loaded.history.filter(version => version.id !== loaded.view.version.id)) {
+    rest.push(satellite(`v-${version.id}`, 'version', `이전 버전 v${version.version_no}`, version.title || '제목 없는 기록', () => open(version.id)));
+  }
+  for (const neighbor of loaded.neighbors.filter(item => item.side === 'left')) {
+    rest.push(satellite(`r-${neighbor.relation.id}`, 'relation', relationLabel(neighbor.relation.predicate), neighbor.node.title, neighbor.node.target.kind === 'version' ? () => open(neighbor.node.target.id) : undefined));
+  }
+
+  if (!evidenceItems.length && !rest.length) return [satellite('empty', 'empty', '', '첨부된 근거 없음')];
+  return [...evidenceItems, ...cap(rest, false, loaded.view.version.id)];
 }
 
 function rightSatellites(loaded: Loaded, open: (versionId: string) => void): ReactNode[] {
@@ -193,14 +226,63 @@ function rightSatellites(loaded: Loaded, open: (versionId: string) => void): Rea
     const conceptId = meaning.annotation.concept_version_id;
     out.push(satellite(`m-${meaning.annotation.id}`, 'meaning', '의미', body, conceptId ? () => open(conceptId) : undefined));
   }
-  const summary = loaded.view.review_summary;
-  out.push(satellite('review', 'review', '검토', summary.review_state === 'unreviewed' ? '아직 검토 없음' : `${summary.agree} 동의 · ${summary.disagree} 반대 · ${summary.needs_review} 검토 필요`));
   return cap(out, loaded.hasMoreNeighbors, loaded.view.version.id);
 }
 
 function cap(items: ReactNode[], needsMore: boolean, versionId: string): ReactNode[] {
   if (items.length <= SATELLITE_CAP && !needsMore) return items;
   return [...items.slice(0, SATELLITE_CAP - 1), satellite('more', 'more', '… 더 있음', <a href={`/versions/${encodeURIComponent(versionId)}`}>전체 맥락</a>)];
+}
+
+// ---- Review table (B §2.2): focus × stance, pinned at the top of the right column regardless of the
+// satellite cap. Built from dossier.agreements.reviews and dossier.counterarguments.reviews — every review
+// made on this version (the dossier already drops a keyed reviewer's superseded judgement). Row/column
+// order and counting live in reading-spans.ts (pure, unit-tested).
+function reviewTable(dossier: Dossier | null): ReactNode {
+  if (!dossier) return null;
+  const reviews = [...dossier.agreements.reviews, ...dossier.counterarguments.reviews];
+  const counts = countReviewsByFocus(reviews);
+  const rows = REVIEW_FOCUS_ROWS.filter(row => {
+    const c = counts.get(row.focus)!;
+    return c.agree + c.disagree + c.needs_review > 0;
+  });
+
+  const keyedTotal = dossier.agreements.agree_keyed + dossier.counterarguments.groups.keyed_actors;
+  const anonymousTotal = dossier.agreements.agree_anonymous + dossier.counterarguments.groups.anonymous_reviews;
+  const truncated = dossier.agreements.truncated;
+
+  return (
+    <div className="universe-review-table" aria-label="이 판에 단 검토">
+      {rows.length === 0 ? (
+        <p className="universe-review-empty">이 판에 단 검토 없음</p>
+      ) : (
+        <>
+          <div className="universe-review-grid" role="table">
+            <span className="universe-review-head universe-review-head-corner" role="columnheader">이 판에 단 검토</span>
+            {REVIEW_STANCES.map(({stance, label}) => <span key={stance} className="universe-review-head" role="columnheader">{label}</span>)}
+            {rows.map(row => {
+              const c = counts.get(row.focus)!;
+              return (
+                <Fragment key={row.focus}>
+                  <span className="universe-review-row-label" role="rowheader">{row.label}</span>
+                  {REVIEW_STANCES.map(({stance}) => (
+                    <span key={stance} className="universe-review-cell" data-nonzero={c[stance] > 0} role="cell">{c[stance] > 0 ? c[stance] : '·'}</span>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </div>
+          {truncated && <p className="universe-review-note">50건까지만 셈</p>}
+        </>
+      )}
+      {(keyedTotal > 0 || anonymousTotal > 0) && (
+        <p className="universe-review-note">
+          {`키 있는 검토자 ${keyedTotal} · 익명 제출 ${anonymousTotal}건`}
+          {anonymousTotal > 0 && ' 익명 제출 수는 서로 다른 검토자 수가 아닙니다.'}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function truncateExact(text: string): string {

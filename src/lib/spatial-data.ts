@@ -2,6 +2,7 @@ import type {
   Anchor,
   Annotation,
   ContentRef,
+  Dossier,
   Evidence,
   ObjectView,
   Source,
@@ -258,6 +259,17 @@ export async function loadSpatialSearch(query: string, options: SpatialSearchOpt
 
 export async function loadSpatialVersion(versionId: string, signal?: AbortSignal): Promise<VersionView> {
   return apiGet<VersionView>(`/versions/${encodeURIComponent(versionId)}`, signal);
+}
+
+/**
+ * Full dossier for one version (roadmap 2.9's `/dossier`): quote-check state per evidence, and the reviews
+ * that were made on this version (agreements and counterarguments), in one request. Reader satellites (1.9
+ * §4/B §2) build the per-evidence "인용 대조" line and the focus × stance review table from this instead of
+ * separate `/reviews` calls.
+ */
+export async function loadSpatialDossier(versionId: string, signal?: AbortSignal): Promise<Dossier> {
+  const params = new URLSearchParams({target_kind: 'version', target_id: versionId});
+  return apiGet<Dossier>(`/dossier?${params}`, signal);
 }
 
 export async function loadSpatialContext(target: ContentRef, depth: 1 | 2 = 1, signal?: AbortSignal): Promise<ContextPage> {

@@ -166,6 +166,13 @@ export default function Universe() {
   const [notFound, setNotFound] = useState(false);
   const [pillHidden, setPillHidden] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  /** Touch or a narrow viewport keeps the search pill visible as before; a fine pointer on a wide screen hides it by default. */
+  const [alwaysVisible, setAlwaysVisible] = useState(false);
+  const alwaysVisibleRef = useRef(false);
+  /** Desktop only: the pill shows on demand (`/`, Cmd/Ctrl+K, or typing while nothing is focused) rather than staying docked. */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchOpenRef = useRef(false);
+  const searchPrevFocusRef = useRef<HTMLElement | null>(null);
   const [composing, setComposing] = useState(false);
   const [query, setQuery] = useState('');
   const [reader, setReader] = useState<ReaderTarget | null>(null);
@@ -516,6 +523,28 @@ export default function Universe() {
     stillTimerRef.current = setTimeout(() => { stillTimerRef.current = null; void fetchNearby(); }, STILL_MS);
   }
 
+  /** Desktop: reveal the search pill and focus it, remembering what had focus so it can be restored on hide. */
+  function openSearch(): void {
+    if (!searchOpenRef.current) {
+      const active = document.activeElement;
+      searchPrevFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    }
+    searchOpenRef.current = true;
+    setSearchOpen(true);
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }
+
+  /** Hides the desktop pill again and returns focus to wherever it came from, or the viewport. */
+  function closeSearch(): void {
+    if (!searchOpenRef.current) return;
+    searchOpenRef.current = false;
+    setSearchOpen(false);
+    const prev = searchPrevFocusRef.current;
+    searchPrevFocusRef.current = null;
+    if (prev && document.contains(prev)) prev.focus();
+    else containerRef.current?.focus();
+  }
+
   function markActive(): void {
     touchedRef.current = true;
     setPillHidden(true);
@@ -785,6 +814,11 @@ export default function Universe() {
     const container = containerRef.current;
     if (!container) return;
     reducedMotionRef.current = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Touch pointers and narrow screens keep the search pill docked (as before); a fine pointer on >=850px hides it by default.
+    const narrowQuery = matchMedia('(pointer: coarse), (max-width: 849.98px)');
+    const onNarrowChange = () => { alwaysVisibleRef.current = narrowQuery.matches; setAlwaysVisible(narrowQuery.matches); };
+    onNarrowChange();
+    narrowQuery.addEventListener('change', onNarrowChange);
     viewportRef.current = {width: container.clientWidth, height: container.clientHeight};
     resizeCanvas();
     const source = createTopicSource();
@@ -802,7 +836,16 @@ export default function Universe() {
         const params = new URLSearchParams(window.location.search);
         const target = params.get('c');
         const targetEntry = target ? categoriesRef.current.get(target) : null;
-        const fit = {circle: targetEntry ? targetEntry.circle : rootCircle(), margin: targetEntry ? 0.8 : 0.92};
+        // With no explicit target, open on the "Morum" star itself (its own field guide), framed close enough
+        // that its planet names are already readable — the same fit used when a star is entered directly.
+        const morumEntry = !targetEntry
+          ? categoriesRef.current.get(CENTER_CATEGORY_ID) ?? [...categoriesRef.current.values()].find(entry => entry.category.label === 'Morum')
+          : null;
+        const fit = targetEntry
+          ? {circle: targetEntry.circle, margin: 0.8}
+          : morumEntry
+            ? {circle: morumEntry.star, margin: 0.8}
+            : {circle: rootCircle(), margin: 0.92};
         cameraRef.current = fitCircle(viewportRef.current, fit.circle, fit.margin);
         lastFitRef.current = fit;
         schedulePaint();
@@ -881,7 +924,17 @@ export default function Universe() {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
       const inField = target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
-      if (event.key === '/' && !inField) { event.preventDefault(); searchInputRef.current?.focus(); return; }
+      if (event.key === '/' && !inField) { event.preventDefault(); openSearch(); return; }
+      if (!inField && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
+      // Desktop only: start typing anywhere with nothing focused and the pill opens with that first character already in it.
+      if (!inField && !alwaysVisibleRef.current && !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing &&
+        event.key.length === 1 && event.key !== '+' && event.key !== '=' && event.key !== '-' &&
+        (document.activeElement === document.body || document.activeElement === containerRef.current)) {
+        event.preventDefault();
+        openSearch();
+        setQuery(event.key);
+        return;
+      }
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
       if (readerRef.current) return; // Reading keys belong to the reader while it is open.
@@ -918,6 +971,7 @@ export default function Universe() {
       mountedRef.current = false;
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
+      narrowQuery.removeEventListener('change', onNarrowChange);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('popstate', onPopState);
       container.removeEventListener('wheel', onWheel);
@@ -1058,12 +1112,17 @@ export default function Universe() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape' && !alwaysVisible) { event.preventDefault(); event.stopPropagation(); closeSearch(); return; }
     if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing) return;
     event.preventDefault();
     void runSearch(query);
-  }, [composing, query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alwaysVisible, composing, query]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dockHidden = (pillHidden && !inputFocused) || reader !== null;
+  // Touch/narrow: docked pill, hidden only while idle-and-unfocused (unchanged). Desktop: hidden until explicitly opened,
+  // and unlike the docked pill it stays open over the reader rather than disappearing with the rest of the chrome.
+  const dockHidden = alwaysVisible ? (pillHidden && !inputFocused) || reader !== null : !searchOpen;
+  const desktopHint = '검색 / · 항성 두 번 눌러 들어가기 · 행성 두 번 눌러 읽기';
+  const narrowHint = '항성을 두 번 눌러 들어가고, 행성을 두 번 눌러 읽습니다';
 
   function renderCategoryButton(id: string) {
     const entry = categoriesRef.current.get(id);
@@ -1104,13 +1163,15 @@ export default function Universe() {
         <UniverseReader target={reader} reducedMotion={reducedMotionRef.current}
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
-      <div className="universe-chrome" data-hidden={reader !== null}>
-        <p className="universe-crumb" aria-live="polite" data-hint={!notFound && !crumbText}>{notFound ? '찾지 못했다' : crumbText || '항성을 두 번 눌러 들어가고, 행성을 두 번 눌러 읽습니다'}</p>
+      <div className="universe-chrome">
+        <p className="universe-crumb" aria-live="polite" data-hidden={reader !== null}
+          data-hint={!notFound && !crumbText}>{notFound ? '찾지 못했다' : crumbText || (alwaysVisible ? narrowHint : desktopHint)}</p>
         <div className="universe-search" data-hidden={dockHidden}>
           <label className="universe-sr-only" htmlFor="universe-query">우주 검색</label>
           <input id="universe-query" ref={searchInputRef} value={query} autoComplete="off" placeholder="검색"
             onChange={event => setQuery(event.target.value)}
-            onFocus={() => setInputFocused(true)} onBlur={() => setInputFocused(false)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => { setInputFocused(false); if (!alwaysVisible && query.trim() === '') closeSearch(); }}
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={event => { setComposing(false); setQuery(event.currentTarget.value); }}
             onKeyDown={onSearchKeyDown} />

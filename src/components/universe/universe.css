@@ -159,6 +159,28 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
 .universe-cite-why { margin-top: .3rem; color: #8a8a8a; font-size: .74rem; }
 .universe-cite-where { margin-top: .3rem; color: #6a6a6a; font-size: .68rem; }
 
+/* Quote-check line (1.9 §4 / B §2.1): worded against the submitted excerpt, never "원문". Colour separates
+   only compared vs not-compared, never right vs wrong — found_* and not_found share the same colour. */
+.universe-cite-check { display: block; margin-top: .3rem; font-size: .72rem; line-height: 1.5; }
+.universe-cite-check-label { display: inline; margin: 0; color: #8a8496; font-weight: inherit; font-size: inherit; letter-spacing: normal; }
+.universe-cite-check[data-compared="true"] { color: #c9c3d6; }
+.universe-cite-check[data-compared="false"] { color: #8a8496; }
+.universe-cite-note { grid-column: 1 / -1; margin: .25rem 0 0; color: #8a8496; font-size: .68rem; line-height: 1.5; }
+
+/* Review table (B §2.2): focus × stance, pinned above the capped satellites. No border or row rule. */
+.universe-review-table { display: grid; gap: .4rem; width: 100%; margin-bottom: .3rem; }
+.universe-review-empty { margin: 0; color: #8a8496; font-size: .8rem; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif; }
+.universe-review-grid {
+  display: grid; grid-template-columns: auto repeat(3, 3.4rem); column-gap: .5rem; row-gap: .2rem; align-items: baseline;
+  font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
+}
+.universe-review-head { color: #8a8496; font-size: .66rem; letter-spacing: .06em; text-align: right; }
+.universe-review-head-corner { text-align: left; }
+.universe-review-row-label { color: #a39dae; font-size: .74rem; }
+.universe-review-cell { color: #5f5b68; font-size: .74rem; font-variant-numeric: tabular-nums; text-align: right; }
+.universe-review-cell[data-nonzero="true"] { color: #f1ecff; }
+.universe-review-note { margin: 0; color: #8a8496; font-size: .68rem; line-height: 1.5; }
+
 @media (min-width: 1100px) {
   .universe-reader-grid { grid-template-columns: 16rem minmax(0, 34rem) 16rem; gap: 2.5rem; justify-items: stretch; }
   .universe-satellites { width: auto; position: sticky; top: 3rem; }
@@ -173,12 +195,17 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
   width: min(35rem, calc(100% - 2rem)); display: grid; gap: .55rem; justify-items: center; pointer-events: none;
   transition: opacity 260ms ease;
 }
-.universe-chrome[data-hidden="true"] { opacity: 0; }
 .universe-crumb {
   margin: 0; min-height: 1.2em; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em; text-align: center;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
+  transition: opacity 260ms ease;
 }
+.universe-crumb[data-hidden="true"] { opacity: 0; }
 .universe-crumb[data-hint="true"] { color: #5f5b68; }
+/* Desktop's default hint ("검색 / · 항성 두 번 눌러 들어가기 · 행성 두 번 눌러 읽기"), shown while the pill stays docked-hidden. */
+@media (min-width: 850px) and (pointer: fine) {
+  .universe-crumb[data-hint="true"] { color: #8a8496; font-size: 12px; }
+}
 .universe-search {
   pointer-events: auto; display: flex; width: 100%; min-height: 3rem; overflow: hidden; border: 0; border-radius: 999px;
   background: rgb(255 255 255 / .05);
@@ -194,6 +221,8 @@ button.universe-satellite:hover, button.universe-satellite:focus-visible { backg
 @media (max-width: 850px) {
   .universe-chrome { width: calc(100% - 2rem); }
   .universe-item-snippet { max-width: 70vw; }
+  /* B §4: 16px keeps iOS Safari from zooming the page on focus; the pill itself already meets 48px height. */
+  .universe-search input { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .universe-search, .universe-category-label, .universe-item-title, .universe-item-snippet, .universe-viewport, .universe-canvas, .universe-chrome { transition: none; }
