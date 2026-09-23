@@ -126,7 +126,7 @@ export function createTreeSource(roots: TreeCategory[]): UniverseSource {
       snippet: item.snippet ?? '',
       href: `/versions/${encodeURIComponent(item.id)}`,
       versionId: item.id,
-      node: {key: `version:${item.id}`, target, locator: null, locators: [], title: item.title, snippet: item.snippet ?? '', href: `/versions/${encodeURIComponent(item.id)}`, isCurrent: true, versionState: 'current', score: null, syntheticDemo: false, topic: categoryId, untitled: !item.title, duplicateOf: null, role: item.star ? 'star' : null},
+      node: {key: `version:${item.id}`, target, locator: null, locators: [], title: item.title, snippet: item.snippet ?? '', href: `/versions/${encodeURIComponent(item.id)}`, isCurrent: true, versionState: 'current', score: null, syntheticDemo: false, topic: categoryId, untitled: !item.title, duplicateOf: null, role: item.star ? 'star' : null, createdAt: null, reviewCount: null},
     };
   };
 

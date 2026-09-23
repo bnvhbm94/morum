@@ -455,7 +455,18 @@ export default function Universe() {
     try {
       const [items] = await Promise.all([source.items(categoryId, signal), fetchStarDoc(categoryId, signal).catch(() => null)]);
       if (!mountedRef.current) return;
-      const circles = placeOrbits(entry.star, items.map(item => item.id), entry.category.layoutSeed);
+      const ages = items.map(item => (item.node.createdAt ? Date.parse(item.node.createdAt) : null));
+      const validAges = ages.filter((a): a is number => a !== null && Number.isFinite(a));
+      const oldest = validAges.length ? Math.min(...validAges) : 0;
+      const newest = validAges.length ? Math.max(...validAges) : 0;
+      const ageSpan = newest - oldest || 1;
+      const planets = items.map((item, i) => ({
+        id: item.id,
+        // ageRank input: 1 = oldest. Raw age (older = smaller timestamp), normalised; placeOrbits ranks it itself.
+        ageRank: ages[i] === null ? 0.5 : 1 - (ages[i]! - oldest) / ageSpan,
+        reviewRank: item.node.reviewCount === null ? 0.5 : item.node.reviewCount,
+      }));
+      const circles = placeOrbits(entry.star, categoryId, planets, entry.category.layoutSeed);
       const map = new Map<string, ItemEntry>();
       for (const item of items) { const circle = circles.get(item.id); if (circle) map.set(item.id, {item, circle}); }
       itemCirclesRef.current.set(categoryId, map);

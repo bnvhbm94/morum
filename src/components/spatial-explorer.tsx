@@ -127,6 +127,8 @@ function synthesizeVersionNode(id: string): SpatialNode {
     untitled: true,
     duplicateOf: null,
     role: null,
+    createdAt: null,
+    reviewCount: null,
   };
 }
 
@@ -527,6 +529,8 @@ function nodeFromVersionView(view: VersionView): SpatialNode {
     untitled: !view.version.title?.trim(),
     duplicateOf: typeof view.version.attributes?.duplicate_of === 'string' ? view.version.attributes.duplicate_of : null,
     role: view.version.attributes?.role === 'star' ? 'star' : null,
+    createdAt: view.version.created_at ?? null,
+    reviewCount: null,
   };
 }
 
@@ -551,6 +555,8 @@ function buildSatellites(near: NearState, planetNode: SpatialNode): SatelliteIte
       untitled: !version.title?.trim(),
       duplicateOf: null,
       role: null,
+      createdAt: version.created_at ?? null,
+      reviewCount: null,
     }}));
 
   const basisItems: Satellite[] = near.citations.map(citation => ({

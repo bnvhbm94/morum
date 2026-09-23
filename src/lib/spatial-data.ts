@@ -43,6 +43,10 @@ export type SpatialNode = {
   duplicateOf: string | null;
   /** attributes.role: "star" marks the description document of its topic; it is shown on the star, not as a planet. */
   role: 'star' | null;
+  /** created_at of the record's current version, when known (for orbit placement §2 of the 1.9 spec). */
+  createdAt: string | null;
+  /** agree + disagree + needs_review from review_summary, when known (for orbit placement). */
+  reviewCount: number | null;
 };
 
 export type SpatialPage = {
@@ -107,6 +111,8 @@ function makeNode(input: {
   topic?: string | null;
   duplicateOf?: string | null;
   role?: string | null;
+  createdAt?: string | null;
+  reviewCount?: number | null;
 }): SpatialNode {
   const target = input.target;
   const snippet = input.snippet?.trim() || '';
@@ -126,6 +132,8 @@ function makeNode(input: {
     untitled: !input.title?.trim(),
     duplicateOf: input.duplicateOf?.trim() || null,
     role: input.role === 'star' ? 'star' : null,
+    createdAt: input.createdAt ?? null,
+    reviewCount: input.reviewCount ?? null,
   };
 }
 
@@ -141,6 +149,10 @@ export function recordsToSpatialPage(data: Paged<RecordSummary>): SpatialPage {
       topic: typeof record.current.attributes?.topic === 'string' ? record.current.attributes.topic : null,
       duplicateOf: typeof record.current.attributes?.duplicate_of === 'string' ? record.current.attributes.duplicate_of : null,
       role: typeof record.current.attributes?.role === 'string' ? record.current.attributes.role : null,
+      createdAt: record.created_at ?? null,
+      reviewCount: record.review_summary
+        ? record.review_summary.agree + record.review_summary.disagree + record.review_summary.needs_review
+        : null,
     })),
     page: data.page,
     hasMore: Boolean(data.page.next_cursor || data.page.truncated),

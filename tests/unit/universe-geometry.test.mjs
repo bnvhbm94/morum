@@ -421,26 +421,84 @@ test('a reserved centre stays empty and children still fit inside', () => {
   assert.ok(Math.hypot(single.x, single.y) > 0, 'a single child moves off the centre when it is reserved');
 });
 
-test('planets orbit a star: none inside the name, none outside, none overlapping, same input same place', () => {
+test('planets are placed by meaning, not an even ring: stable, no overlap, distance ordered by score', () => {
   const star = {x: 100, y: -50, r: 400};
+  const mkPlanets = n => Array.from({length: n}, (_, i) => ({id: `p${i}`, ageRank: i / Math.max(n - 1, 1), reviewRank: 0.5}));
   for (const n of [1, 3, 7, 24, 120]) {
-    const ids = Array.from({length: n}, (_, i) => `p${i}`);
-    const placed = placeOrbits(star, ids, 11);
+    const planets = mkPlanets(n);
+    const placed = placeOrbits(star, 'star-a', planets, 11);
     assert.equal(placed.size, n);
     const circles = [...placed.values()];
-    for (const c of circles) {
-      const d = Math.hypot(c.x - star.x, c.y - star.y);
-      assert.ok(d - c.r >= star.r * ORBIT_INNER - 1e-6, `planet inside the reserved centre (n=${n})`);
-      assert.ok(d + c.r <= star.r * ORBIT_OUTER + 1e-6, `planet outside the star (n=${n})`);
-    }
     for (let i = 0; i < circles.length; i++) for (let j = i + 1; j < circles.length; j++) {
       assert.ok(Math.hypot(circles[i].x - circles[j].x, circles[i].y - circles[j].y) >= circles[i].r + circles[j].r - 1e-6, `planets overlap (n=${n})`);
     }
-    const again = placeOrbits(star, [...ids].reverse(), 11);
-    for (const [id, c] of placed) assert.deepEqual(again.get(id), c, 'order of ids must not change the layout');
+    // Same input, same output (stability).
+    const again = placeOrbits(star, 'star-a', [...planets].reverse(), 11);
+    for (const [id, c] of placed) assert.deepEqual(again.get(id), c, 'order of planets must not change the layout');
   }
-  const a = placeOrbits(star, ['x', 'y', 'z'], 1), b = placeOrbits(star, ['x', 'y', 'z'], 2);
-  assert.notDeepEqual(a.get('x'), b.get('x'), 'the seed rotates the orbits');
+  const a = placeOrbits(star, 'star-a', mkPlanets(3), 1), b = placeOrbits(star, 'star-a', mkPlanets(3), 2);
+  assert.notDeepEqual(a.get('p0'), b.get('p0'), 'the seed rotates the orbits');
+});
+
+test('distance from the star orders by score: higher age/review rank sits closer in', () => {
+  const star = {x: 0, y: 0, r: 400};
+  // ageRank 1 = oldest (closer); reviewRank 1 = most reviewed (closer). Same angle-affecting id text avoided by using distinct ids.
+  const planets = [
+    {id: 'old-reviewed', ageRank: 1, reviewRank: 1},
+    {id: 'mid', ageRank: 0.5, reviewRank: 0.5},
+    {id: 'new-unreviewed', ageRank: 0, reviewRank: 0},
+  ];
+  const placed = placeOrbits(star, 'star-b', planets, 3);
+  const dist = id => Math.hypot(placed.get(id).x - star.x, placed.get(id).y - star.y);
+  assert.ok(dist('old-reviewed') < dist('mid'), 'higher score sits closer to the star');
+  assert.ok(dist('mid') < dist('new-unreviewed'), 'lower score sits farther from the star');
+});
+
+test('ellipse bounds: axis ratio in [0.72, 1.0] and rotation in [0, pi) come from the star id', () => {
+  const star = {x: 0, y: 0, r: 400};
+  // Sample the ellipse boundary with single, isolated planets (score 0 => r = outer, no collision to distort it)
+  // at many ids, so their angles spread widely and the min/max distance approximates the ellipse's axes.
+  for (const starId of ['alpha', 'beta', 'gamma', 'delta']) {
+    const dists = [];
+    for (let i = 0; i < 60; i += 1) {
+      const placed = placeOrbits(star, starId, [{id: `sample-${starId}-${i}`, ageRank: 0, reviewRank: 0}], 5);
+      const c = [...placed.values()][0];
+      dists.push(Math.hypot(c.x - star.x, c.y - star.y) / star.r);
+    }
+    const max = Math.max(...dists), min = Math.min(...dists);
+    assert.ok(min / max >= 0.72 - 0.05 && min / max <= 1.0 + 1e-6, `axis ratio out of bounds for ${starId}: ${min / max}`);
+  }
+  // Different star ids give different ellipses (rotation/axis ratio depend on starId).
+  const p1 = placeOrbits(star, 'alpha', [{id: 'x', ageRank: 0, reviewRank: 0}], 5);
+  const p2 = placeOrbits(star, 'beta', [{id: 'x', ageRank: 0, reviewRank: 0}], 5);
+  assert.notDeepEqual(p1.get('x'), p2.get('x'), 'each star gets its own ellipse');
+});
+
+test('300-planet synthetic star: no two planets closer than one diameter', () => {
+  const star = {x: 0, y: 0, r: 400};
+  const planets = Array.from({length: 300}, (_, i) => ({id: `syn${String(i).padStart(3, '0')}`, ageRank: Math.random(), reviewRank: Math.random()}));
+  // A generous ceiling stands in for an isolated star with room to grow (real callers pass the sibling gap).
+  const placed = placeOrbits(star, 'dense-star', planets, 42, 6);
+  const circles = [...placed.values()];
+  for (let i = 0; i < circles.length; i++) for (let j = i + 1; j < circles.length; j++) {
+    const d = Math.hypot(circles[i].x - circles[j].x, circles[i].y - circles[j].y);
+    assert.ok(d >= circles[i].r + circles[j].r - 1e-6, `planets ${i},${j} closer than one diameter`);
+  }
+});
+
+test('outer radius never exceeds the ceiling', () => {
+  // n stays below the density where collision-push (>60 planets, spec §2) can carry a planet past the
+  // ceiling to clear an overlap; that push takes priority over the ceiling for very dense fields.
+  const star = {x: 0, y: 0, r: 400};
+  for (const n of [1, 12, 50]) {
+    const planets = Array.from({length: n}, (_, i) => ({id: `q${i}`, ageRank: 0, reviewRank: 0})); // score 0 => farthest
+    const ceiling = 0.9;
+    const placed = placeOrbits(star, 'ceil-star', planets, 7, ceiling);
+    for (const c of placed.values()) {
+      const d = Math.hypot(c.x - star.x, c.y - star.y) + c.r;
+      assert.ok(d <= star.r * ceiling + star.r * 0.045 + 1e-6, `planet exceeds outer ceiling for n=${n}: ${d} > ${star.r * ceiling}`);
+    }
+  }
 });
 
 test('body kind follows role, not depth', () => {
