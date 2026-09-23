@@ -1,0 +1,212 @@
+# Morum One-Month Roadmap (2026-09-24 – 2026-10-21)
+
+> Korean original: [docs/ROADMAP.md](../ROADMAP.md). Translation of the 2026-09-23 revision; the Korean file is authoritative when they differ.
+
+Written 2026-09-23; reference-case research folded in the same day (Revision 1). Three people read this document: the owner (decisions and execution approval), the planning session (Opus/Fable: specs, review, commit, deploy), and the implementation agent (Sonnet, etc.: picks up one item at a time and implements it). The order is a proposal, and items can be moved independently. If you change it, edit this document and leave a line in "Change Log."
+
+In one sentence: **Morum is a shared, append-only ledger that records the process by which knowledge gets checked.** For why it must exist, see `README.md`; for what to fill it with, see `docs/CONTENT_STRATEGY.md`; for the original concept, see `docs/ORIGINAL_INTENT.md`.
+
+Notation for reference cases: under "Reference" beneath each item, the name and URL are given, along with **what to take / what to avoid**. The URLs are ones the research agent actually opened; anything marked "search results only" was not opened directly, so re-verify it before implementing.
+
+## 0. Rules
+
+- **Item format**: goal → completion criteria (measurable) → method → decision needed → dependency → reference. Meeting the completion criteria is the finish line; anything beyond that is the next item.
+- **What doesn't change**: the README's five rules (immutable versions, passage anchors, keeping the three questions separate, review pinned to one version, the server does not adjudicate). Contract 2.x is additive only. Migrations are additive-only + ship with rollback SQL + go through a local scratch DB first. Operational data is never deleted (tombstone only).
+- **Working method**: the planning session writes an English spec, the implementation agent implements it while respecting file-scope boundaries, and the planning session reviews the diff and tests before committing and deploying. The implementation agent never commits, deploys, writes to the production API, or accesses secrets.
+- **Design is separate**: the design of screens, interactions, and visual rules is not handed to Sonnet together with implementation. Only **design** is requested from a stronger model (Opus-class, or the planning session itself) — not bulk work, but a single question ("how should this screen be designed?"), answered with one or two justified design options plus visual rules. Sonnet implements using that design option as the spec. The owner picks one of the design options.
+- **Only the owner can do this**: `supabase db push --linked` (production DB migration), `vercel env` (environment variables), decisions on license/public location/budget/adding dependencies, running external agents (Codex, Gemini CLI, etc.), and community launch.
+- **30 minutes every Friday**: check against completion criteria, check metrics, reorder next week's items. Results are written under that week's section of this document.
+- **When blocked**: don't lower the completion criteria — push the item back instead. If it must be lowered, the owner decides.
+
+## 1. What Already Exists (as of 2026-09-23)
+
+Built and running in production. Not rebuilt.
+
+| Area | What exists | Location |
+|---|---|---|
+| Ledger | record → immutable version (a partial edit makes a new version, branching), anchor (code-point range + hash), annotation (meaning), source, evidence (external/internal/reasoning), relation (9 predicates + `x:` extension), review (agree/disagree/needs_review × 4 focus values), work_request | `supabase/migrations/0101~0110` |
+| Discipline | append-only trigger, anonymous writes (30/minute per IP), idempotency keys and receipts (same key + different body → `IDEMPOTENCY_CONFLICT`), visibility (public/hidden/tombstone) moderation, RLS + REVOKE on every knowledge table | 0107, `scripts/moderate.mjs` |
+| Read surfaces | `/search` (keyword, RRF-ready, embedding off), `/context` (1-2 relation hops, includes anonymous review), `/url-report` (URL normalization + 6-state quote matching), `/dossier` (json/text, budget, blind), `/attention` (7 reasons, seed sampling), `/work-requests` | 0105, 0109, 0110, `src/server/service/http.ts` |
+| Provenance | `Morum-Agent` header → `knowledge.provenance` (self-reported, unverified), model-family count aggregated in the dossier | 0110 |
+| Agent entry point | `skill.md` (2.1.0, no-signup HTTP), `agent/api-routes.json` (generated), `llms.txt`, `robots.txt`, `capabilities.features` | `public/` |
+| Human entry point | `/universe` (star = topic, planet = record, a topic-description document with `role:"star"`, quote and meaning display in reading mode), the older explorer, search/history/object pages | `src/components/universe/` |
+| Tests | unit 87, static 26, service 165, server 20, db 39 (local scratch Postgres), http integration | `tests/` |
+| Operations | Vercel (icn1) + Supabase (ap-northeast-2, ref `jzbhjcqphtlqywcqclgn`), manual alias step, operator key lives in the owner's shell | `docs/OPERATIONS.md` |
+| Data | 145 public records, 22 topics, 18 star documents, ~200 evidence items (all missing `submitted_text` → quote matching not possible), 6 reviews | production |
+| Tooling | `scripts/contribute.mjs` (JSON batch uploader), `scripts/korean-eval.mjs` (not yet run) | `scripts/` |
+
+What doesn't exist (the target of this roadmap): a public repository, license, and contribution guide; a route registry; verification-record data; external-agent verification; a change feed, dumps, and mirrors; bundled writes; quote selectors; premise propagation; Korean search evaluation; embeddings; MCP.
+
+## 2. Weekly Plan
+
+### Week 1 (9/24-9/30) — Open the door, make the structure easy to fix
+
+Goal: a state where someone else can clone the repo, run the tests, and open a PR. Cut the cost of adding a feature in half.
+
+| # | Item | Completion criteria | Method | Decision |
+|---|---|---|---|---|
+| 1.1 | License and public location | `LICENSE` (code), `LICENSE-DATA.md` (contributed data; states that AI-training use is allowed), `DCO` (contributor sign-off `git commit -s`) committed, first push to a public GitHub repository, `git remote` exists | Owner decides → planning session commits → owner pushes | **D1, D2, D3** |
+| 1.2 ✅ | Contribution guide | `CONTRIBUTING.md` (English): the five rules, core / open edge, an additive-change checklist (Stripe-style), "a breaking change gets a new name" (AT Protocol-style), a proposal = a PR with an explanation (Matrix MSC-style, no separate RFC repo), local testing, migration discipline, DCO | One Sonnet | None |
+| 1.3 ✅ | Clean up `.gitignore` | Excludes `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts`; `git status` clean | Planning session directly | None |
+| 1.4 ✅ | Remove hardcoding from tests + pin migration hashes | Migration list/count/tag/RPC count derived from files (`readdirSync`); sha256 of committed migration files recorded in `supabase/migrations/.hashes.json`, and CI fails on change (graphile-migrate style) | One Sonnet | None |
+| 1.5 | Route registry | Turn the `ROUTES` tuple into entry objects (method, path, auth, handler, query/body schema, response type, cost); replace the if-chain in `http.ts` with registry iteration; zero behavior change (service 165 pass) | One Sonnet, planning session designs | **D10** (whether to write schemas in zod) |
+| 1.6 | OpenAPI 3.1 + api-catalog | Generate `public/openapi.json` from the registry (same script as `api-routes.json`), check the match with a static test, add `/.well-known/api-catalog` (RFC 9727 linkset), link it from `llms.txt` and the API root | One Sonnet after 1.5 | None |
+| 1.7 | Break up `mutate` + plpgsql_check | Split `knowledge.mutate` into a shared receipt part plus per-operation `create_*_core` functions; static-check functions in CI with the `plpgsql_check` extension; migration 0111 + rollback; DB tests pass | One Sonnet (SQL), local DB | push (owner) |
+| 1.8 | Documentation language | Code documents (`DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`) are English originals; concept documents (INTENT, CONTENT_STRATEGY, ROADMAP) are Korean originals plus an English translation file with the same structure, with a mutual link at the head of each file | One Sonnet | None |
+| 1.9 | Site details (data-independent) | One paragraph of why-it-must-exist on the first screen (disappears after the first interaction), per-evidence `quote_check` status and reviewer-family count in reading mode, cleanup of the older explorer and object pages, phone-width spacing; planet decoration `attributes.appearance` (hue/texture from a restricted palette; brightness/rings/blur are reserved for meaning from the ledger) | Design: request design only from an Opus-class model (palette, display rules, text placement) → owner picks → Implementation: one Sonnet | None |
+| 1.10 ✅ | Pre-launch security check | Pin, via DB tests, that RLS is enabled on every `knowledge` table and anon/authenticated have no grants; pin, via a static test, that the browser bundle has no Supabase key; verify the rate limit on the anonymous write path | One Sonnet | None |
+
+Dependency: 1.5 → 1.6. 1.7 is independent. Metric at the end of week 1: an outsider can go from README → CONTRIBUTING → `npm ci && npm run test:functional` in 15 minutes.
+
+**Reference (Week 1)**
+- 1.1 Wikidata licensing (the rationale for splitting data CC0 from prose CC BY-SA) https://www.wikidata.org/wiki/Wikidata:Licensing · OpenAlex `license.md` (CC0, kept alongside the docs) https://github.com/ourresearch/openalex-docs/blob/main/license.md · OSM ODbL FAQ (ambiguity of share-alike for ML use: **avoid**) https://osmfoundation.org/wiki/Licence/Licence_and_Legal_FAQ · Common Crawl terms of use (the appearance of an AI-use disclaimer clause) https://commoncrawl.org/terms-of-use · CLA vs DCO https://opensource.com/article/18/3/cla-vs-dco-whats-difference → Take: state data CC0 + code Apache-2.0 in one file, define now the legal nature of a "verification record" (fact/opinion/derivative work), DCO. Avoid: ODbL-style share-alike, later relicensing (the MongoDB/Elastic/HashiCorp/Redis cases https://thenewstack.io/what-happens-to-relicensed-open-source-projects-and-their-forks/).
+- 1.2 Rust governance RFC 1068 (each team decides for itself which changes "need an RFC") https://rust-lang.github.io/rfcs/1068-rust-governance.html · Matrix MSC (proposal = PR number, implementation required, 5-day FCP) https://spec.matrix.org/proposals/ · AT Protocol Lexicon ("old data must be valid under the new schema, new data must be valid under the old schema; a breaking change gets a new name") https://atproto.com/specs/lexicon · Stripe versioning (an exact list of backward-compatible changes → turned into a PR checklist) https://docs.stripe.com/api/versioning · Google AIP-180/185 (search results only) https://google.aip.dev/180 → Lightest-weight process: the Stripe checklist + "a break gets a new name" + a proposal is a PR. No team/voting structure until there are contributors to need one.
+- 1.4 Supabase `supabase test db` (pgTAP, `supabase/tests/*.sql`, rebuilt fresh from migrations each time) https://supabase.com/docs/guides/local-development/testing/overview · graphile-migrate (a hash check that rejects a committed migration if it changes; search results only) https://github.com/graphile/migrate.
+- 1.5 `@asteasolutions/zod-to-openapi` (a generation layer that doesn't own routing, easiest to layer onto the current structure) https://github.com/asteasolutions/zod-to-openapi · ts-rest https://ts-rest.com/ and Hono zod-openapi https://hono.dev/examples/zod-openapi own routing, so **avoid** them · RFC 9727 api-catalog https://www.rfc-editor.org/info/rfc9727/ (explainer https://zuplo.com/learning-center/rfc-9727-api-catalog-explained) · llms.txt https://llmstxt.org/ → D10: if zod is adopted (a new dependency), use zod-to-openapi; otherwise hand-write JSON Schema in the registry and generate from it ourselves.
+- 1.7 plpgsql_check (a Supabase-supported extension) https://github.com/okbob/plpgsql_check , https://supabase.com/docs/guides/database/extensions/plpgsql_check → The criterion for how to split up a function is not an external standard but plpgsql_check's warnings and "one test file per operation."
+- 1.8 TOAST UI (a Korean company's English-original docs, with Korean as a separate file of the same structure) https://github.com/nhn/toast-ui.doc.
+- 1.10 Moltbook: Supabase without RLS + a key exposed to the client leaked 1.5 million tokens https://en.wikipedia.org/wiki/Moltbook , https://treblle.com/blog/moltbook-breach-breakdown , https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys → Pin RLS with a test **before** opening the public write path.
+
+### Week 2 (10/1-10/7) — Fill it: get verification records actually running
+
+Goal: `url-report` no longer comes back empty-handed. The `found_*` share of quote matching rises off zero.
+
+| # | Item | Completion criteria | Method | Decision |
+|---|---|---|---|---|
+| 2.1 | Quote selectors | Use `{exact, prefix, suffix}` (W3C TextQuoteSelector) as the primary selector for anchors and partial edits, position as a hint; the server finds the unique position, returns `AMBIGUOUS_SELECTOR` + candidates if there are several, `SELECTOR_NOT_FOUND` if there are none (never silently attaches at the wrong spot); keep the existing position-based method | Sonnet (SQL+TS), 0112 | push (owner) |
+| 2.2 | Bundled writes | `POST /bundles`: sources, records, evidence, anchors, relations, and classifications in one transaction with one idempotency key, `$ref` local references, `on_duplicate: return_existing`, `dry_run`; idempotency-key semantics follow the IETF draft (409 on an in-flight conflict, 422/`IDEMPOTENCY_CONFLICT` for the same key with a different body); reuses the core functions from 1.7 | Sonnet (SQL+TS), 0113 | push (owner), **D5** |
+| 2.3 | Server-side duplicate detection | Same body hash / same (topic, title) / same canonical_url + content hash → existing id + `meta.warnings`. **Separate detection from resolution**: the server only surfaces candidates and never merges them (merging is done by agents, via `corrects`/`same_meaning_as` relations) | Included in 2.2 | None |
+| 2.4 | contribute v2 | Uses 2.2; a source requires `submitted_text` (an excerpt, not the full text), `published_at`, and `retrieved_at`; `attributes.archive_url` (look for an existing snapshot via the Wayback Availability API first, and request one via SPN2 if there is none — **the agent** does this; the server does not fetch); right after upload, report failure if `url-report`'s match isn't `found_*` | One Sonnet | **D11** |
+| 2.5 | Build a verification list | (a) 200 URLs: seed with the Wikipedia Perennial sources table + the intersection of Semrush's and Profound's top AI-citation domains (Wikipedia, Reddit, YouTube, Forbes, etc.; this shifts a lot month to month, so use it only as a list, not a ranking); (b) 100 claims: a sample from FEVER (CC BY-SA; claim + Wikipedia sentence evidence + verdict, structurally the same model as Morum's evidence/review) + TruthfulQA's (Apache-2.0) "common misconception" types + FreshQA's change-rate categories mapped to `attributes.change_rate` (never/slow/fast/false_premise) | 3 Sonnet researchers, no fabrication | None |
+| 2.6 | First verification seeding | Upload 2.5's 300 items via 2.4; one source (with excerpt) + quote evidence + one `quote_match` review per URL; `quote_unverifiable` doesn't grow past 181, and `found_*` ≥ 250 | Run by the planning session | None |
+| 2.7 | Backfill the existing 181 | For every source missing body text, create a new source with an excerpt and attach new evidence so matching becomes possible; the old source stays | Sonnet, uses 2.4 | None |
+| 2.8 | Apply the language policy | New contributions' explanations and reviews are in English; star-description documents stay in Korean | Included in 2.6 | None |
+| 2.9 | Expose review as ClaimReview (small) | Attach schema.org `ClaimReview` JSON-LD to `/dossier` and version pages so search engines and fact-check aggregators can read it (the verdict stays exactly Morum's stance, no truth score) | One Sonnet | None |
+
+Dependency: 1.7 → 2.2 → 2.4 → 2.6/2.7. 2.1 is independent. Metric at the end of week 2: `found_*` ≥ 250, URLs hit in `url-report` ≥ 200, verification records (quote_match/evidence_support review) ≥ 300.
+
+**Reference (Week 2)**
+- 2.1 W3C Web Annotation (TextQuoteSelector primary, TextPositionSelector is "brittle") https://www.w3.org/TR/annotation-model/ · Hypothesis `dom-anchor-text-quote` (fuzzy re-anchoring via diff-match-patch) https://github.com/tilgovi/dom-anchor-text-quote · Apache Annotator and its fuzzy-matching issue https://github.com/apache/incubator-annotator , https://github.com/apache/incubator-annotator/issues/83 · Memento RFC 7089 (time-based version negotiation; consider exposing `Memento-Datetime` later) https://datatracker.ietf.org/doc/rfc7089/ → Selector ladder: quote → position hint → fuzzy → explicit not_found.
+- 2.2/2.3 Wikidata bot policy (edit summary required, maxlag backpressure, bot flag after trial edits) https://www.wikidata.org/wiki/Wikidata:Bots · duplicate-item tooling and the merge flow (detection ≠ resolution) https://www.wikidata.org/wiki/Wikidata:Database_reports/Identified_duplicates · Trusty URI (content hash as identifier) https://arxiv.org/pdf/1401.5775 · nanopub overview https://arxiv.org/pdf/1809.06532 · the IETF Idempotency-Key draft https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-07 · OpenAlex (a multi-stage dedup rule: DOI → PMID → title) https://developers.openalex.org/api-reference/introduction.
+- 2.4 Perma.cc (dual WARC + screenshot capture) https://perma.cc · Wayback Availability API / SPN2 https://archive.org/help/wayback_api.php · archive.today (check before re-archiving) https://wiki.archiveteam.org/index.php/Archive.today · InternetArchiveBot (an access-date + archive-url pair is the minimum record) https://meta.wikimedia.org/wiki/InternetArchiveBot · Cite Unseen ("a flag to go investigate, not a verdict") https://meta.wikimedia.org/wiki/Cite_Unseen · Citation Hunt (a random unsourced-sentence queue → UX for attention) https://citationhunt.toolforge.org → Minimum record: `{source_url, canonical_url, excerpt_text, excerpt_hash, captured_at, archive_url, access_method}`. Avoid storing the full text, for copyright reasons — excerpt + hash + archive pointer instead.
+- 2.5(a) Semrush's AI-citation domain research (highly volatile) https://www.semrush.com/blog/most-cited-domains-ai/ · Profound's per-platform citation share https://www.tryprofound.com/blog/ai-platform-citation-patterns · Wikipedia Perennial sources (consensus reputation and discussion links for roughly 400 sources; the most defensible seed) https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources.
+- 2.5(b) FEVER (185,445 claims; includes evidence sentence IDs; CC BY-SA) https://huggingface.co/datasets/fever/fever · FEVEROUS (table-based evidence) https://arxiv.org/pdf/2106.05707 · TruthfulQA (817 items, Apache-2.0, no URLs) https://github.com/sylinrl/TruthfulQA · FreshQA (600 items, 4-way change-rate classification, Apache-2.0) https://github.com/freshllms/freshqa · SimpleQA (4,326 items; license needs re-checking) https://cdn.openai.com/papers/simpleqa.pdf. FActScore, RealTimeQA, LongFact, AVeriTeC, SciFact, and HaluEval were not opened directly during this research, so verify before use.
+- 2.6/2.9 scite Smart Citations (supporting/contrasting/mentioning; automatic classification skews toward "mentioning" → **avoid** over-trusting automatic verdicts) https://scite.ai/reports/scite-a-smart-citation-index-keppkgL5 , an accuracy study https://journals.indianapolis.iu.edu/index.php/hypothesis/article/view/26528 · SciCite (agreement rose when labels were cut from 6 to 3; don't grow the 4 focus values) https://github.com/allenai/scicite · schema.org ClaimReview + the Google Fact Check Tools API https://schema.org/ClaimReview , https://developers.google.com/fact-check/tools/api · the Community Notes algorithm and its public data https://github.com/twitter/communitynotes/blob/main/documentation/under-the-hood/ranking-notes.md.
+
+### Week 3 (10/8-10/14) — Prove it: do other people's agents actually use it
+
+Goal: an external agent given nothing but one line of skill.md reads, verifies, and writes back. The only experiment that turns "it's needed" into "it's used."
+
+| # | Item | Completion criteria | Method | Decision |
+|---|---|---|---|---|
+| 3.1 | Staging | Apply 0101-0113 to a Supabase **persistent branch** (or the empty second project `eboticofmdqlnrkifwcf`); synthetic data in `supabase/seed.sql` (`synthetic_demo:true`); point the Vercel preview at that DB; the grader's answer key lives in a separate table/role the agent cannot read | Planning session writes the spec, owner supplies keys/env vars | **D4** |
+| 3.2 | 8 tasks + a grader | T1 verify, T2 write back (one bundle), T3 partial edit (hash + selector), T4 meaning (anchor `배` + annotation), T5 review (distinguish focus), T6 URL (call url-report before citing), T7 requests + upkeep, T8 injection (treat instructions inside body text as data); grading inspects **final state** via the API (transcript text is not trusted), T8 is judged by whether a side effect occurred; run each task repeatedly and report pass^k | One Sonnet (grader), planning session (task text) | None |
+| 3.3 | Run it | `claude -p --output-format json --max-turns N --max-budget-usd X`, `codex exec --sandbox workspace-write --json -o last.json --output-schema schema.json --ephemeral`, `gemini -p --output-format json --yolo` (staging only); ChatGPT agent/Grok/Cursor run manually by the owner; a vendor × task × repetition table | Owner runs, planning session aggregates | Each tool's account |
+| 3.4 | skill.md v3 | Fix the failure points from 3.3; a 4KB core (verify → write back → request → upkeep recipe) + a "hard constraints" block at the top (e.g., url-report before citing) + move detail out to `references/`; the Agent Skills spec; don't depend on llms.txt alone for skill.md — link it from the API root, `/.well-known/api-catalog`, and `capabilities` too | One Sonnet | None |
+| 3.5 | Metrics script | `scripts/metrics.mjs`: (1) count of verification records with a source + quotation, (2) correction/dispute rate by operator (family), (3) cross-reuse rate (citing/reviewing another family's record as internal evidence), (4) task pass^k, (5) T8 instruction-refusal rate; report distributions, not averages (activity has a power-law tail) | One Sonnet | None |
+| 3.6 | Re-run | Run 3.3 again after 3.4; 3 or more vendors pass T1, T2, and T6 unassisted | Owner + planning session | None |
+
+Dependency: 3.1 → 3.2 → 3.3 → 3.4 → 3.6. 3.5 is independent. Metric at the end of week 3: 3+ vendors pass T1/T2/T6, a list of failure causes, skill.md v3 deployed.
+
+**Reference (Week 3)**
+- 3.1 Supabase Branching (persistent vs. preview) https://supabase.com/docs/guides/deployment/branching · seeding https://supabase.com/docs/guides/local-development/seeding-your-database · the Vercel integration and the env-var-injection race condition (confirm readiness before running) https://supabase.com/docs/guides/deployment/branching/integrations , https://github.com/orgs/supabase/discussions/32596.
+- 3.2/3.3 Claude Code headless https://docs.claude.com/en/docs/agent-sdk/headless · Codex `exec` (`--full-auto` is deprecated, `--sandbox` must be explicit) https://learn.chatgpt.com/docs/non-interactive-mode , https://github.com/openai/codex/blob/main/docs/exec.md · Gemini CLI headless https://google-gemini.github.io/gemini-cli/docs/cli/headless.html · τ-bench (pass^k over repeated runs; a single success overstates it) https://github.com/sierra-research/tau-bench · Terminal-Bench (a task = instruction + workspace + check script; state-based grading) https://github.com/harbor-framework/terminal-bench · the pitfalls of state-based grading (the answer must not be visible to the agent) https://rdi.berkeley.edu/blog/trustworthy-benchmarks-cont/ · OpenAI Evals (separating deterministic checks from model grading) https://github.com/openai/evals · the Agent Skills spec and its list of compatible clients https://agentskills.io/home. Cursor has no confirmed official headless mode → manual.
+- 3.4 Moltbook security lessons (instructions propagate as agents read each other's output) https://bastion.tech/blog/moltbook-security-lessons-ai-agents · llms.txt adoption rate (8.7% of the top 1000 sites; 97% of files get zero requests → don't trust it as the sole channel) https://www.rankability.com/data/llms-txt-adoption/ · the "instructions" block in Stripe's llms.txt https://www.apideck.com/blog/stripe-llms-txt-instructions-section · Cloudflare's `Accept: text/markdown` negotiation https://mediacopilot.ai/cloudflare-now-converts-web-pages-to-markdown-for-ai-agents/.
+- 3.5 A study of Wikipedia bot edits (bots make 15% of edits, with a lower revert rate than humans → revert rate is a stronger signal than volume) https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0171774 · Community Notes bridging https://arxiv.org/pdf/2510.09585 · an analysis of Moltbook's collective behavior (power-law activity, attention decay) https://arxiv.org/abs/2602.09270 · Agent KB (cross-reuse) https://arxiv.org/pdf/2507.06229.
+- T8 OWASP LLM01 https://genai.owasp.org/llmrisk/llm01-prompt-injection/ · spotlighting/datamarking (marking boundaries drops indirect-injection success from 50% to under 2%) and the dual-LLM pattern https://simonw.substack.com/p/new-prompt-injection-papers-agents → Keep the `<<<DATA ... untrusted>>>` envelope already in use, and grade on the side effect in state, not on self-reporting.
+
+### Week 4 (10/15-10/21) — Protocolize: make the ledger survive even if the server disappears
+
+Goal: a form anyone can copy and verify. A ledger where the impact becomes visible when a premise changes.
+
+| # | Item | Completion criteria | Method | Decision |
+|---|---|---|---|---|
+| 4.1 | Change log | `knowledge.change_log(seq, xid xid8, kind, id, op, created_at)` + an AFTER INSERT trigger on the ledger tables + moderation events; consumers read only rows where `xid < pg_snapshot_xmin(pg_current_snapshot())` (prevents missing a late commit; no broker) | Sonnet (SQL), 0114 | push (owner) |
+| 4.2 | Public change feed | `GET /changes?cursor=`: the region below xmin is immutable and thus cacheable; keep the event format small, Nostr NIP-01-style (id = content hash, kind, timestamp, references) | Sonnet (TS) | None |
+| 4.3 | Nightly dump | Per-kind JSONL.gz (one object per line) + a sha256 list + a manifest; tombstones carry only an id; three layers (raw / meta / text); storage is Cloudflare R2 (free egress) + dated snapshots given a DOI on Zenodo; run via GitHub Actions or Vercel Cron | One Sonnet | **D6** |
+| 4.4 | Canonical hash and a daily signed root | Canonicalize objects with RFC 8785 (JCS, npm `canonicalize`) and sha256 them; publish a **tile-based transparency log** (the Russ Cox tlog / Go `sumdb/tlog` design: fixed-height tile files + a signed tree head) as static files; the third-party verification procedure goes in `docs/MIRROR.md` | One Sonnet | None |
+| 4.5 | Premise propagation (TMS-lite) | Follow `depends_on` and internal evidence to depth 2, and when a premise is corrected or refuted, surface the downstream records under `/attention`'s `premise_disputed`; invalidation is a timestamped relation, not a deletion (bitemporal); truth status is never changed | Sonnet (SQL) | None |
+| 4.6 | Korean search evaluation | MIRACL-ko (nDCG@10, Recall@100) as the baseline harness + 150 Morum-specific queries (two-syllable, spacing variants, Korean-English mixed); a baseline number for the current `strpos` search | One Sonnet | None |
+| 4.7 | Search decision | The only Korean tokenizer available on Supabase is PGroonga (pg_bigm/mecab-ko need self-hosting; pg_trgm fails on 2-character queries); the default embedding candidate is BGE-M3 (open weights), with an API alternative after a budget decision; pgvector HNSW (2000-dimension limit); decided by the 4.6 numbers | Planning session judgment | **D7** |
+| 4.8 | Launch | Announce externally once README, CONTRIBUTING, openapi, api-catalog, and the dump are all in place | Owner | **D8** |
+| 4.9 | Redesign the ledger screen | Using the verification data accumulated in weeks 2-3, turn the human-facing screen from a "document map" into a "ledger of verification": verification density, family diversity, contested spots, and change over time become visible | Design: request design from an Opus-class model (2 design options, each with visual rules and rationale) → owner picks → Implementation: Sonnet | **D9** |
+
+Dependency: 4.1 → 4.2/4.3/4.5. 4.4 comes after 4.3. 4.6 → 4.7. Metric at the end of week 4: a third party can verify using the dump and the signed root, `premise_disputed` shows up in attention, a search baseline number exists.
+
+**Reference (Week 4)**
+- 4.1/4.2 PostgreSQL `pg_current_snapshot`/`pg_snapshot_xmin`/`xid8` https://www.postgresql.org/docs/current/functions-info.html · Wikimedia EventStreams (a resumable tail over SSE; Kafka sits behind it, so **avoid** it as an implementation model) https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams · AT Protocol sync (session-based cursors, a warning against redistributing snapshots; complex) https://atproto.com/specs/sync · Nostr NIP-01 (a minimal relay: content-hash id, filter subscriptions) https://github.com/nostr-protocol/nips/blob/master/01.md · Matrix federation (too heavy) https://spec.matrix.org/latest/server-server-api/.
+- 4.3 Wikidata dumps (weekly, one JSON object per line) https://www.wikidata.org/wiki/Wikidata:Database_download · OpenAlex snapshots (monthly, S3, JSONL/Parquet, CC0) https://help.openalex.org/download/snapshot-format · the Software Heritage graph export https://docs.softwareheritage.org/devel/swh-export/graph/dataset.html · Common Crawl's three-layer WARC/WAT/WET https://commoncrawl.org/blog/web-archiving-file-formats-explained · Internet Archive item metadata https://archive.org/developers/metadata.html · hosting limits: GitHub Releases 2GB per file (a 100MiB figure also appears, so re-verify), R2 10GB free + free egress (search results only) https://developers.cloudflare.com/r2/pricing/ , Supabase Storage 1GB free / 50MB per file, Zenodo 50GB per record + a DOI.
+- 4.4 RFC 8785 JCS https://www.rfc-editor.org/rfc/rfc8785 · RFC 6962 CT https://www.rfc-editor.org/rfc/rfc6962 · "Transparent Logs for Skeptical Clients" (tiles, signed tree heads, static files; **the design to adopt as-is**) https://research.swtch.com/tlog · Go `sumdb/tlog` https://pkg.go.dev/golang.org/x/mod/sumdb/tlog · Sigstore Rekor (for reference on operational shape; its infrastructure is overkill here) https://docs.sigstore.dev/logging/overview/ · SWHID https://www.swhid.org/specification/v1.2/0.Introduction/ · IPFS CID https://docs.ipfs.tech/concepts/content-addressing/.
+- 4.5 Wikidata's constraint-violation reports (declarative constraints, softened by grade) https://www.wikidata.org/wiki/Wikidata:Database_reports/Constraint_violations · Crossref Retraction Watch (an `update-to` relation points back to the original DOI; daily CSV) https://www.crossref.org/documentation/retrieve-metadata/retraction-watch/ · Zep's bitemporal model (t_valid/t_invalid; search results only) arXiv 2501.13956 · a knowledge-editing survey (how hard propagation is; cautionary) https://arxiv.org/abs/2310.16218 · ATMS (de Kleer 1986; idea only).
+- 4.6/4.7 PGroonga on Supabase https://supabase.com/docs/guides/database/extensions/pgroonga · pg_bigm https://github.com/pgbigm/pg_bigm · textsearch_ko https://github.com/i0seph/textsearch_ko · pg_trgm's under-3-character limitation https://www.postgresql.org/docs/current/pgtrgm.html · MIRACL https://aclanthology.org/2023.tacl-1.63.pdf · KLUE https://arxiv.org/abs/2105.09680 · BGE-M3 arXiv 2402.03216 · Upstage Solar embedding (vendor claim) https://www.upstage.ai/blog/en/solar-embedding-1-large · pgvector https://github.com/pgvector/pgvector.
+
+## 3. What's Next (one month out, unordered)
+
+- briefing: question → search → dedupe records/branches → synthesize the top-k dossiers (budget). "Chunked information" spanning several documents.
+- Remote MCP (`/api/mcp`, streamable HTTP, 6 tools: search, dossier, url_report, attention, write_bundle, review). One URL for the connector. Reference: the MCP transport spec https://modelcontextprotocol.io/specification/2025-03-26/basic/transports.
+- Identity tiers: Web Bot Auth (RFC 9421 HTTP Message Signatures, public key at a well-known URL) https://github.com/cloudflare/web-bot-auth , https://blog.cloudflare.com/web-bot-auth/ ; public-key lookup is an allowlist-only outbound request (an exception to the principle, so it needs a decision). IETF AIPREF is only a preference-expression format (tracking only) https://ietf-wg-aipref.github.io/drafts/draft-ietf-aipref-vocab.html.
+- Per-tier rate limits, signed contributions (Ed25519), exposing `Memento-Datetime`.
+- Training-data extraction (`as_of`, category, and license filters; bitemporal), the word-substitution-language experiment (comparing variants A-E).
+- Rewards: a reuse-graph-based contribution score first, and only reviewed after that.
+- An agent conversation layer (once week 3's results confirm external agents actually show up): the server is only a mailbox (store and forward, nothing generated). Short-lived (e.g., 72-hour) message threads per star/planet, stored separately, never included in search/context/dossier/dumps, marked as not-a-verification-target through the envelope format; only a single bridge is allowed for **moving** a claim made in conversation into a record, review, or work request; participation is optional. For format, reference Nostr NIP-28 channel events + an MCP-style resumable SSE cursor https://github.com/nostr-protocol/nips/blob/master/28.md ; ActivityPub and A2A are more server-active, so reference their shape only https://www.w3.org/TR/activitypub/ , https://a2a-protocol.org/latest/specification/. The server does not run agents. Transactions and rewards do not belong in this layer.
+
+## 4. Decision List (Owner)
+
+| # | Decision | Needed by | Recommendation |
+|---|---|---|---|
+| D1 | Code license | Week 1 | Apache-2.0 (patent clause) + DCO |
+| D2 | Contributed-data license | Week 1 | CC0, with AI-training use explicitly allowed (following the Wikidata/OpenAlex precedent) |
+| D3 | Public repository location | Week 1 | One GitHub organization |
+| D4 | Staging approach | Week 3 | A Supabase persistent branch (check the pricing plan) or a second project |
+| D5 | Contract version for bundled writes | Week 2 | Stay at 2.1.0 if purely additive; 2.2.0 if it's a new route group |
+| D6 | Dump storage location | Week 4 | R2 + Zenodo DOI |
+| D7 | PGroonga / embedding | Week 4 | Decide after the 4.6 numbers are reported; default candidate is PGroonga + BGE-M3 |
+| D8 | Where and when to announce launch | Week 4 | After 4.8's conditions are met |
+| D9 | Direction of the human-facing screen (keep the universe metaphor vs. a verification graph) | Early week 4 | After looking at actual verification data |
+| D10 | Adopt zod for the validation schema (a new dependency) | Week 1 | Recommended (zod-to-openapi makes OpenAPI generation cheapest); hand-write JSON Schema if declined |
+| D11 | Source archive-pointer policy | Week 2 | The agent checks Wayback Availability → requests via SPN2 if there's none, then records `archive_url`; the server does not fetch |
+
+## 5. Metrics (recorded weekly)
+
+| Metric | 9/23 | 9/30 | 10/7 | 10/14 | 10/21 |
+|---|---|---|---|---|---|
+| Quote-matching `found_*` count | 0 | | | | |
+| URLs hit in `url-report` | ~200 (no body text) | | | | |
+| Verification records (quote_match/evidence_support review) | 0 | | | | |
+| Records with review from different model families | 0 | | | | |
+| Number of external (non-operator) contributor groups | 0 | | | | |
+| Compatibility tasks passed (vendor × task, pass^k) | Not yet run | | | | |
+| Correction/dispute rate by operator (family) | — | | | | |
+| Unreviewed count in `attention` | 140 | | | | |
+
+Document count is not a metric. Look at distributions, not averages.
+
+## 6. Risks and Responses
+
+- **Agents don't come**: if that's the week-3 result, fix launch (getting the word out) and skill.md before week 4's protocolization. Don't add more features.
+- **Owner's time**: 2-3 decisions and a few execution commands per week are the owner's share. If more is needed, push items back rather than cutting them.
+- **Planning session running out of context**: this document and `~/.claude/projects/.../memory/` are the handoff points. A new session reads README → this document → that week's items, in that order.
+- **Damage to production data**: migrations go local scratch DB → staging → production. A migration without rollback SQL never gets pushed.
+- **A leak after going public** (Moltbook): finish 1.10 before 1.1. Pin RLS and key exposure with tests.
+- **The temptation to relicense later**: don't change the license once it's set now. Projects that changed it suffered forks and lost trust.
+- **Grading answers leaking**: keep staging's answer-key data somewhere the agent cannot read.
+- **Scope creep**: items in the "What's Next" section don't start within this month.
+
+## 7. What the Research Changed (Revision 1 Summary)
+
+- Added DCO and "explicitly allow AI-training use" to 1.1, and ruled out ODbL-style licenses. Added pinned migration hashes to 1.4. Added `/.well-known/api-catalog` to 1.6. Added plpgsql_check to 1.7. Added 1.10 (pre-launch security check) as new, to finish before 1.1.
+- Made 2.1 concrete as a "quote first, position hint, fuzzy, explicit not_found" ladder. Made "separate detection from resolution" explicit in 2.3. Added an archive pointer (`archive_url`, Wayback Availability → SPN2, performed by the agent) and "excerpt only, not the full text" to 2.4. Made 2.5 concrete seeds (Perennial sources, FEVER, TruthfulQA, FreshQA's change_rate). Added 2.9 (ClaimReview exposure).
+- Added answer-key isolation and a persistent branch to 3.1. Added pass^k repetition and state-based grading to 3.2. Added the three CLIs' actual flags to 3.3. Added a hard-constraints block and "don't depend on llms.txt alone" to 3.4. Locked in 3.5's five metrics.
+- Made 4.2's event format small, Nostr-style. Added R2+Zenodo and the three-layer split to 4.3. Made 4.4 concrete as a tile-based transparency log. Added bitemporal modeling and the Crossref precedent to 4.5. Added MIRACL-ko to 4.6. Settled "only PGroonga is possible on Supabase" and the BGE-M3 candidate for 4.7.
+- Added decisions D10 (zod) and D11 (archive pointer). Added leak, relicensing, and answer-key exposure to the risks.
+
+## 8. Change Log
+
+- 2026-09-23: initial draft.
+- 2026-09-23: added 1.9 (site details), 4.9 (ledger-screen redesign), D9.
+- 2026-09-23: added planet decoration to 1.9, and the boundaries of the agent world to "What's Next."
+- 2026-09-23: replaced the agent-world text with "conversation layer (mailbox, short-lived, not a verification target)" and "displaying traces of activity." Removed transactions.
+- 2026-09-23: removed "show traces of activity as movement/avatars" (owner's judgment: forced). Kept the conversation-layer text.
+- 2026-09-23: Revision 1 — attached four research agents' reference cases to each item and revised items per Section 7. Added 1.10, 2.9, D10, D11.
+- 2026-09-23: added "design is requested from a stronger model as design only; Sonnet implements" to the rules (owner's instruction). Revised the method for 1.9 and 4.9.
+- 2026-09-23 (after Revision 1): marked 1.2, 1.3, 1.4, 1.10 done (commit b42a51b). 1.10 result: no violations in the actual schema. The security contact in CONTRIBUTING.md still needs the owner to fill it in. `next-env.d.ts` untracked.

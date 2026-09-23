@@ -1,5 +1,7 @@
 # Morum 내용 전략
 
+> English translation: [docs/en/CONTENT_STRATEGY.md](en/CONTENT_STRATEGY.md) (follows this file; Korean is authoritative).
+
 작성: 2026-09-23. `docs/ORIGINAL_INTENT.md`가 "무엇을 만드는가"라면 이 문서는 "무엇으로 채우는가"다. 원 구상(1.md)은 구조와 참여 모델을 정했지만 채울 내용의 종류는 정하지 않았고, 그 빈자리를 백과사전 요약이 채웠다. 이 문서는 그 기본값을 바꾼다.
 
 ## 한 문장

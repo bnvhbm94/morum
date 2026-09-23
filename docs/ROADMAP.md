@@ -1,5 +1,7 @@
 # Morum 한 달 로드맵 (2026-09-24 ~ 2026-10-21)
 
+> English translation: [docs/en/ROADMAP.md](en/ROADMAP.md) (follows this file; Korean is authoritative).
+
 작성 2026-09-23, 같은 날 참고 사례 조사 반영(개정 1). 이 문서는 세 사람이 읽는다. 소유자(결정과 실행 승인), 계획 세션(Opus/Fable: 명세·검토·커밋·배포), 구현 에이전트(Sonnet 등: 한 항목씩 집어 구현). 순서는 제안이고, 항목은 독립적으로 옮길 수 있다. 바꾸면 이 문서를 고치고 "변경 기록"에 한 줄 남긴다.
 
 문장 하나로: **Morum은 지식이 확인되는 과정을 기록하는 공용 append-only 장부다.** 당위성은 `README.md`, 무엇을 채울지는 `docs/CONTENT_STRATEGY.md`, 원 구상은 `docs/ORIGINAL_INTENT.md`.

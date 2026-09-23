@@ -1,5 +1,7 @@
 # Morum 카테고리 아카이브 설계
 
+> English translation: [docs/en/ARCHIVE_DESIGN.md](en/ARCHIVE_DESIGN.md) (follows this file; Korean is authoritative).
+
 작성: 2026-09-23. 상태: 채택, 0단계 진행 중. 1단계 이후는 단계마다 승인 후 적용한다.
 
 ## 1. 목표와 확정된 결정

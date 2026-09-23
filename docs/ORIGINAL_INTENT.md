@@ -1,5 +1,7 @@
 # Morum 원 구상 증류본
 
+> English translation: [docs/en/ORIGINAL_INTENT.md](en/ORIGINAL_INTENT.md) (follows this file; Korean is authoritative).
+
 작성: 2026-09-23. `MY THOUGHT/1.md`(사용자 원문), `2.md`(AI 정리), `3.md`(구현 대조), `4.md`(관련 연구)를 전부 읽고 A4 2~3장으로 줄인 것이다. 구현 세션은 이 문서만 읽고 시작한다. 원문과 충돌하면 `1.md`의 사용자 발언이 이긴다. 인용은 사용자 직접 발언이다.
 
 ## 1. 출발점과 목적
