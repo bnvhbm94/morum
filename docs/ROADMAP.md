@@ -47,6 +47,7 @@
 | 1.5 | 경로 등록표 | `ROUTES` 튜플을 항목 객체(method, path, auth, handler, query schema, body schema, response type, cost)로; `http.ts`의 if 사슬을 등록표 순회로; 동작 변화 0(service 165 통과) | Sonnet 1명, 계획 세션이 설계 | 없음 |
 | 1.6 | OpenAPI 생성 | 등록표에서 `public/openapi.json`(3.1) 생성, `api-routes.json`과 같은 스크립트, 정적 테스트로 일치 검사, `llms.txt`에 링크 | 1.5 뒤 Sonnet 1명 | 없음 |
 | 1.7 | `mutate` 분해 | `knowledge.mutate`를 영수증 공통부 + 연산별 `create_*_core` 함수로; 마이그레이션 0111 + 롤백; DB 39 통과 | Sonnet 1명(SQL), 로컬 DB | 마이그레이션 push(소유자) |
+| 1.9 | 사이트 디테일(데이터 무관) | 첫 화면에 당위성 한 단락(우주 위, 첫 상호작용 후 사라짐), 읽기 모드에 근거별 `quote_check` 상태와 검토 계열 수 표시, 구형 explorer·객체 페이지를 우주 읽기 모드로 통합 또는 링크 정리, 폰 폭 간격 점검 | Sonnet 1명, 계획 세션 검토 | 없음 |
 | 1.8 | 문서 언어 | `DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`를 영어로; 구상 문서(INTENT, CONTENT_STRATEGY, ROADMAP)는 한국어 유지 + 영어 요약 절 | Sonnet 1명 | 없음 |
 
 의존: 1.5 → 1.6. 1.7은 독립. 1주 끝의 지표: 외부인이 README → CONTRIBUTING → `npm ci && npm run test:functional`까지 15분 안에 가능.
@@ -96,6 +97,7 @@
 | 4.5 | 전제 전파(TMS-lite) | `depends_on`·내부 근거로 깊이 2까지 따라가, 전제가 정정·반박되면 후속 기록을 `/attention`의 `premise_disputed`로; 진실 상태는 바꾸지 않음 | Sonnet(SQL) 4.1에 포함 가능 | 없음 |
 | 4.6 | 한국어 검색 평가 | `scripts/korean-eval.mjs`에 정답 질의 150(두 음절, 띄어쓰기 변형, 한영 혼용), nDCG@10·Recall@20·p95 측정, 현재 `strpos` 검색의 기준선 수치 | Sonnet 1명 | 없음 |
 | 4.7 | 검색 결정 | 4.6 결과로 PGroonga(TokenNgram) 도입 여부와 임베딩 제공자·예산 결정; 도입 시 0115 + `search_docs` 비정규화 | 계획 세션 판단 | **필요**: 확장 활성화, 임베딩 예산 |
+| 4.9 | 장부 화면 재설계 | 2·3주에 쌓인 확인 데이터로 사람용 화면을 "문서 지도"에서 "확인의 장부"로: 확인 밀도·계열 다양성·논쟁 중인 자리·시간 변화가 보임; 우주 은유 유지 여부는 D9 | 계획 세션 설계안 2개 → 소유자 선택 → Sonnet 구현 | **필요** D9 |
 | 4.8 | 공개 | README·CONTRIBUTING·openapi·덤프가 갖춰진 상태로 외부에 알림(장소는 소유자 결정); `llms.txt`와 `/.well-known/api-catalog`(RFC 9727) | 소유자 | **필요** |
 
 의존: 4.1 → 4.2/4.3/4.5. 4.4는 4.3 뒤. 4.6 → 4.7. 4주 끝의 지표: 제3자가 덤프를 받아 해시를 검증할 수 있음, `premise_disputed`가 attention에 나옴, 검색 기준선 수치 존재.
@@ -121,6 +123,7 @@
 | D6 | 덤프 저장 위치 | 4주 | Supabase Storage 공개 버킷 |
 | D7 | PGroonga·임베딩 | 4주 | 평가 수치 보고 결정 |
 | D8 | 공개 알림 장소와 시점 | 4주 | 4.8 조건 충족 뒤 |
+| D9 | 사람용 화면의 방향(우주 은유 유지 vs 확인 그래프) | 4주 초 | 실제 확인 데이터를 본 뒤 결정 |
 
 ## 5. 지표 (매주 기록)
 
@@ -157,3 +160,4 @@
 ## 8. 변경 기록
 
 - 2026-09-23 최초 작성.
+- 2026-09-23 1.9(사이트 디테일), 4.9(장부 화면 재설계), D9 추가.
