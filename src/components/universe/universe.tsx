@@ -39,12 +39,17 @@ const MAX_FLICK = 60;
 const CENTER_CATEGORY_ID = 'topic:Morum';
 /** Fraction of an opened category's radius where particles dim behind its centred name. */
 const NAME_QUIET_RATIO = 0.3;
-/** Planet labels: one line under the dot, culled like map labels when they would overlap. */
-const LABEL_FONT_PX = 13.4;
+/** Planet labels: one line under the dot, culled like map labels when they would overlap. Their size follows the star's size on screen. */
+const LABEL_FONT_MIN_PX = 9.5;
+const LABEL_FONT_MAX_PX = 14;
+/** Star names sit at the centre and scale with the star; planet labels never sit on top of them. */
+const NAME_FONT_MIN_PX = 12;
+const NAME_FONT_MAX_PX = 30;
+/** Planet labels fade in as the star grows from this many screen pixels of radius to twice that. */
+const LABEL_FADE_START_PX = 160;
 const LABEL_MAX_PX = 192;
 const LABEL_MAX_NARROW_PX = 144;
 const LABEL_PAD_PX = 10;
-const LABEL_LINE_PX = 18;
 const LABEL_GAP_PX = 9;
 /** A planet's opening lines appear under its title once its star fills this many screen pixels of radius. */
 const SNIPPET_STAR_PX = 720;
@@ -68,6 +73,14 @@ function itemLabel(item: UniverseItem): string {
   return chars.length > UNTITLED_LABEL_CHARS ? `${chars.slice(0, UNTITLED_LABEL_CHARS).join('')}…` : clause;
 }
 /** Flight time grows a little with the zoom change, so long dives read as travel and short hops stay quick. */
+/** Planet label font for a star of this screen radius. */
+function labelFontPx(starRadiusPx: number): number {
+  return Math.max(LABEL_FONT_MIN_PX, Math.min(LABEL_FONT_MAX_PX, starRadiusPx * 0.032));
+}
+/** Star name font for a star of this screen radius. */
+function nameFontPx(starRadiusPx: number): number {
+  return Math.max(NAME_FONT_MIN_PX, Math.min(NAME_FONT_MAX_PX, starRadiusPx * 0.075));
+}
 function flightMs(from: Camera, to: Camera): number {
   const ratio = Math.abs(Math.log2(to.scale / from.scale));
   return Math.max(420, Math.min(900, 420 + ratio * 110));
@@ -202,11 +215,18 @@ export default function Universe() {
       el.dataset.highlight = highlight && highlight.itemId === itemId && now < highlight.until ? 'true' : 'false';
       const related = entry?.item.versionId ? relatedRef.current.get(entry.item.versionId) : undefined;
       if (related) el.dataset.related = related; else delete el.dataset.related;
+      const star = categoriesRef.current.get(categoryId);
+      const starRadiusPx = star ? screenRadius(star.star, camera) : 0;
+      const font = labelFontPx(starRadiusPx);
+      el.style.setProperty('--label-size', `${font.toFixed(2)}px`);
+      el.style.setProperty('--label-line', `${Math.round(font * 1.35)}px`);
+      el.style.setProperty('--label-fade', Math.max(0, Math.min(1, (starRadiusPx - LABEL_FADE_START_PX * stageScale(viewport)) / (LABEL_FADE_START_PX * stageScale(viewport)))).toFixed(3));
     } else {
       const entry = categoriesRef.current.get(key);
       el.dataset.stage = entry ? stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, stageScale(viewport)) : 'nebula';
       el.dataset.kind = entry?.kind ?? 'empty';
       el.dataset.open = entry && entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport)) ? 'true' : 'false';
+      if (entry) el.style.setProperty('--name-size', `${nameFontPx(screenRadius(entry.star, camera)).toFixed(2)}px`);
     }
   }
 
@@ -276,7 +296,9 @@ export default function Universe() {
         let points = particlesRef.current.get(id);
         if (!points) { points = makeCategoryParticles(entry.circle, entry.category.layoutSeed, entry.category.mass, entry.kind === 'star' ? 2.3 : 1.6); particlesRef.current.set(id, points); }
         if (stage === 'nebula') {
-          drawCategoryParticles(ctx, points, camera, viewport, dim);
+          // Far away a star is a soft point; as it grows, more of its particles light up.
+          const t = Math.min(1, (radiusPx - STAGE_PX.nebula * k) / ((STAGE_PX.open - STAGE_PX.nebula) * k));
+          drawCategoryParticles(ctx, points.slice(0, Math.ceil(points.length * (0.25 + 0.75 * t))), camera, viewport, (0.35 + 0.65 * t) * dim);
         } else {
           const fade = Math.max(0.05, 1 - (radiusPx - STAGE_PX.open * k) / ((STAGE_PX.items - STAGE_PX.open) * k));
           drawCategoryParticles(ctx, points, camera, viewport, fade * dim, {x: entry.circle.x, y: entry.circle.y, r: entry.circle.r * NAME_QUIET_RATIO});
@@ -285,11 +307,19 @@ export default function Universe() {
         // A star's light. Dimmer once its name sits on it, like the particles behind the name.
         if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, (stage === 'nebula' ? 0.85 : 0.35) * dim);
         catNodes.push({id, radiusPx});
+        // The name at the centre takes its place before any planet label.
+        if (stage !== 'nebula' || selectedKeyRef.current === id) {
+          const nameFont = nameFontPx(starRadiusPx);
+          const namePos = worldToScreen(camera, viewport, entry.star);
+          boxes.push({id: `name:${id}`, x: namePos.x, y: namePos.y, width: Math.min(estimateLabelWidth(entry.category.label, nameFont), starRadiusPx * 0.68), height: nameFont * 1.3, priority: 2e6});
+        }
       }
       if (open) {
         const items = itemCirclesRef.current.get(id);
         if (!items) continue;
         const snippetsOn = starRadiusPx >= SNIPPET_STAR_PX;
+        const font = labelFontPx(starRadiusPx);
+        const lineHeight = Math.round(font * 1.35);
         for (const [itemId, entryItem] of items) {
           if (!isVisible(entryItem.circle, camera, viewport)) continue;
           const key = itemKey(id, itemId);
@@ -300,11 +330,11 @@ export default function Universe() {
           const selected = selectedKeyRef.current === key;
           const lit = highlightRef.current?.itemId === itemId;
           const priority = (selected ? 1e6 : 0) + (lit ? 1e5 : 0) + (entryItem.item.node.untitled ? 0 : 10) + Math.min(r, 9);
-          const width = Math.min(estimateLabelWidth(label, LABEL_FONT_PX), viewport.width <= 850 ? LABEL_MAX_NARROW_PX : LABEL_MAX_PX);
-          const titleY = pos.y + r + LABEL_GAP_PX + LABEL_LINE_PX / 2;
-          boxes.push({id: key, x: pos.x, y: titleY, width, height: LABEL_LINE_PX, priority});
+          const width = Math.min(estimateLabelWidth(label, font), viewport.width <= 850 ? LABEL_MAX_NARROW_PX : LABEL_MAX_PX);
+          const titleY = pos.y + r + LABEL_GAP_PX + lineHeight / 2;
+          boxes.push({id: key, x: pos.x, y: titleY, width, height: lineHeight, priority});
           if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
-            boxes.push({id: `${key}#s`, x: pos.x, y: titleY + LABEL_LINE_PX / 2 + 4 + SNIPPET_BOX.height / 2, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
+            boxes.push({id: `${key}#s`, x: pos.x, y: titleY + lineHeight / 2 + 4 + SNIPPET_BOX.height / 2, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
           }
         }
       }
