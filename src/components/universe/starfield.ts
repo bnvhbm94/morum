@@ -48,8 +48,8 @@ export function paintStarfield(ctx: CanvasRenderingContext2D, stars: Star[], cam
 }
 
 /** One soft dot for a category too small to open (LOD 'point'). */
-export function drawCategoryPoint(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, mass: number): void {
-  const alpha = 0.35 + 0.65 * Math.min(1, Math.log2(1 + mass) / 6);
+export function drawCategoryPoint(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, mass: number, dim = 1): void {
+  const alpha = (0.35 + 0.65 * Math.min(1, Math.log2(1 + mass) / 6)) * dim;
   ctx.globalAlpha = alpha;
   ctx.fillStyle = '#f1ecff';
   ctx.beginPath();

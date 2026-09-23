@@ -250,9 +250,11 @@ export default function Universe() {
     const camera = cameraRef.current;
     const k = stageScale(viewport);
     const reading = readerRef.current !== null;
+    // While a document is open the field stays, but every light behind the text is turned well down.
+    const dim = reading ? 0.22 : 1;
 
     ctx.clearRect(0, 0, viewport.width, viewport.height);
-    paintStarfield(ctx, starsRef.current, camera, viewport, reading ? 0.45 : 1);
+    paintStarfield(ctx, starsRef.current, camera, viewport, reading ? 0.3 : 1);
 
     const catNodes: {id: string; radiusPx: number}[] = [];
     const itemNodes: {key: string; radiusPx: number}[] = [];
@@ -265,19 +267,19 @@ export default function Universe() {
       const starRadiusPx = screenRadius(entry.star, camera);
       const open = entry.category.directCount > 0 && itemsOpen(starRadiusPx, k);
       if (stage === 'point') {
-        drawCategoryPoint(ctx, screenPos, entry.category.mass);
+        drawCategoryPoint(ctx, screenPos, entry.category.mass, dim);
       } else {
         let points = particlesRef.current.get(id);
         if (!points) { points = makeCategoryParticles(entry.circle, entry.category.layoutSeed, entry.category.mass, entry.kind === 'star' ? 2.3 : 1.6); particlesRef.current.set(id, points); }
         if (stage === 'nebula') {
-          drawCategoryParticles(ctx, points, camera, viewport, 1);
+          drawCategoryParticles(ctx, points, camera, viewport, dim);
         } else {
           const fade = Math.max(0.05, 1 - (radiusPx - STAGE_PX.open * k) / ((STAGE_PX.items - STAGE_PX.open) * k));
-          drawCategoryParticles(ctx, points, camera, viewport, fade, {x: entry.circle.x, y: entry.circle.y, r: entry.circle.r * NAME_QUIET_RATIO});
-          drawCategoryGlow(ctx, screenPos, radiusPx);
+          drawCategoryParticles(ctx, points, camera, viewport, fade * dim, {x: entry.circle.x, y: entry.circle.y, r: entry.circle.r * NAME_QUIET_RATIO});
+          if (!reading) drawCategoryGlow(ctx, screenPos, radiusPx);
         }
         // A star's light. Dimmer once its name sits on it, like the particles behind the name.
-        if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, stage === 'nebula' ? 0.85 : 0.35);
+        if (entry.kind === 'star' || entry.kind === 'galaxy-star') drawStarCore(ctx, screenPos, starRadiusPx, (stage === 'nebula' ? 0.85 : 0.35) * dim);
         catNodes.push({id, radiusPx});
       }
       if (open) {
