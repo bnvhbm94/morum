@@ -12,7 +12,7 @@ import {
   PAD,
 } from '../../src/components/universe/layout.ts';
 import {bodyKind, starCircle} from '../../src/components/universe/celestial.ts';
-import {estimateLabelWidth, resolveLabels} from '../../src/components/universe/labels.ts';
+import {estimateLabelWidth, resolveLabels, placeDotLabels, LABEL_ANCHOR_ORDER} from '../../src/components/universe/labels.ts';
 import {
   worldToScreen,
   screenToWorld,
@@ -535,4 +535,38 @@ test('labels: overlapping boxes keep the higher priority, zooming apart shows bo
   assert.deepEqual([...resolveLabels(apart)].sort(), ['a', 'b', 'c']);
   const tie = [{id: 'z', x: 0, y: 0, width: 50, height: 18, priority: 1}, {id: 'y', x: 10, y: 0, width: 50, height: 18, priority: 1}];
   assert.deepEqual([...resolveLabels(tie)], ['y'], 'ties resolve by id so the result is stable');
+});
+
+test('labels: a planet title tries all 8 fixed anchors before it gives up, in the given order', () => {
+  // A single obstacle sits exactly below the dot, at the default ("b") anchor's spot: the title must move to
+  // the next anchor in LABEL_ANCHOR_ORDER ("t") rather than disappear.
+  const blockers = [{id: 'obstacle', x: 0, y: 20, width: 40, height: 16, priority: 10}];
+  const placed = placeDotLabels([{id: 'p', x: 0, y: 0, width: 40, height: 16, priority: 1}], {gap: 12, blockers});
+  assert.equal(placed.get('p').anchor, 't');
+
+  // Ring every anchor spot with a blocker: nothing is left, so the label is dropped rather than overlapping.
+  const surrounded = LABEL_ANCHOR_ORDER.map((anchor, i) => ({id: `ring${i}`, x: 0, y: anchor.includes('b') ? 20 : anchor.includes('t') ? -20 : 0, width: 200, height: 200, priority: 10}));
+  const none = placeDotLabels([{id: 'q', x: 0, y: 0, width: 40, height: 16, priority: 1}], {gap: 12, blockers: surrounded});
+  assert.equal(none.has('q'), false);
+});
+
+test('labels: 30 planets in a 400px field — most get a placed, non-overlapping title', () => {
+  const n = 30;
+  const field = 400;
+  // A ring of 30 dots packed into a 400px square: close enough together that the default ("below") anchor
+  // alone would collide for most of them.
+  const dots = Array.from({length: n}, (_, i) => {
+    const angle = (i / n) * Math.PI * 2;
+    return {id: `planet-${i}`, x: field / 2 + Math.cos(angle) * (field * 0.32), y: field / 2 + Math.sin(angle) * (field * 0.32), width: 70, height: 16, priority: n - i};
+  });
+  const placed = placeDotLabels(dots, {gap: 12, pad: 6});
+  assert.ok(placed.size / n >= 0.9, `expected at least 90% placed, got ${placed.size}/${n}`);
+  const boxes = [...placed.values()];
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const a = boxes[i], b = boxes[j];
+      const overlap = Math.abs(a.x - b.x) * 2 < a.width + b.width + 6 && Math.abs(a.y - b.y) * 2 < a.height + b.height + 6;
+      assert.ok(!overlap, `placed labels ${a.id} and ${b.id} overlap`);
+    }
+  }
 });

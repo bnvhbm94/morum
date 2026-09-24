@@ -14,7 +14,7 @@ import {worldToScreen, screenToWorld, zoomAt, panBy, fitCircle, interpolate, ine
 import {screenRadius, stageFor, stageScale, isVisible, pickFetchTargets, directionalNode, itemsOpen, STAGE_PX, type Stage, type FetchCandidate} from './lod';
 import {makeStarfield, paintStarfield, drawCategoryPoint, drawCategoryParticles, drawCategoryGlow, drawStarCore, makeCategoryParticles, type Star, type Particle} from './starfield';
 import {bodyKind, starCircle, CENTER_HOLE, type BodyKind} from './celestial';
-import {estimateLabelWidth, resolveLabels, type LabelBox} from './labels';
+import {estimateLabelWidth, resolveLabels, placeDotLabels, type LabelBox, type LabelAnchor} from './labels';
 import UniverseReader, {readerTargetKey, relationLabel, type ReaderNeighbor, type ReaderTarget} from './reader';
 import {hueHex} from './appearance';
 import './universe.css';
@@ -145,6 +145,8 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const reducedMotionRef = useRef(false);
   const highlightRef = useRef<Highlight | null>(null);
   const labelsRef = useRef<Set<string>>(new Set());
+  /** Which of the 8 fixed anchors each shown planet title landed on, set alongside labelsRef each paint. */
+  const labelAnchorsRef = useRef<Map<string, LabelAnchor>>(new Map());
   /** Declared relations of the open or selected document: version id → predicate label, for marking planets. */
   const relatedRef = useRef<Map<string, string>>(new Map());
 
@@ -280,6 +282,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       el.style.setProperty('--label-max', `${Math.round(maxWidth)}px`);
       el.style.setProperty('--label-lines', entry && estimateLabelWidth(itemLabel(entry.item), font) > maxWidth ? '2' : '1');
       el.style.setProperty('--label-fade', Math.max(0, Math.min(1, (starRadiusPx - LABEL_FADE_START_PX * stageScale(viewport)) / (LABEL_FADE_START_PX * stageScale(viewport)))).toFixed(3));
+      el.dataset.anchor = labelAnchorsRef.current.get(key) ?? 'b';
     } else {
       const entry = categoriesRef.current.get(key);
       el.dataset.stage = entry ? stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, stageScale(viewport)) : 'nebula';
@@ -287,9 +290,14 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       el.dataset.open = entry && entry.category.directCount > 0 && itemsOpen(screenRadius(entry.star, camera), stageScale(viewport)) ? 'true' : 'false';
       el.dataset.named = labelsRef.current.has(`name:${key}`) ? 'true' : 'false';
       if (entry) {
-        const nameFont = nameFontPx(screenRadius(entry.star, camera));
+        const starRadiusPx = screenRadius(entry.star, camera);
+        const nameFont = nameFontPx(starRadiusPx);
         el.style.setProperty('--name-size', `${nameFont.toFixed(2)}px`);
         el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
+        // The reticle hugs the star's own core light, not the (much larger) hit circle around it; a plain
+        // galaxy has no core light to hug, so it falls back to the hit circle's own edge.
+        const reticleBase = entry.kind === 'star' || entry.kind === 'galaxy-star' ? starRadiusPx : r;
+        el.style.setProperty('--reticle-r', `${(reticleBase + 6).toFixed(1)}px`);
       }
     }
   }
@@ -347,6 +355,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const catNodes: {id: string; radiusPx: number}[] = [];
     const itemNodes: {key: string; radiusPx: number}[] = [];
     const boxes: LabelBox[] = [];
+    // Planet titles are placed after every star's name is known (so a title never loses to a star name
+    // that happened to be drawn later), each against its own star's dots.
+    const pendingStars: {snippetsOn: boolean; font: number; lineHeight: number; starRadiusPx: number; dots: {itemId: string; x: number; y: number}[]; labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[]}[] = [];
     for (const [id, entry] of categoriesRef.current) {
       if (!isVisible(entry.circle, camera, viewport)) continue;
       const radiusPx = screenRadius(entry.circle, camera);
@@ -398,8 +409,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
           const p = worldToScreen(camera, viewport, entryItem.circle);
           dots.push({itemId, x: p.x, y: p.y});
         }
-        const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
-          !dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
+        const labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[] = [];
         for (const [itemId, entryItem] of items) {
           if (!isVisible(entryItem.circle, camera, viewport)) continue;
           const key = itemKey(id, itemId);
@@ -416,21 +426,37 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
           const lines = fullWidth > maxWidth ? 2 : 1;
           const width = Math.min(fullWidth, maxWidth);
           const height = lineHeight * lines;
-          const titleY = pos.y + DOT_PX + LABEL_GAP_PX + height / 2;
-          // A title that would be cut by the screen edge or sit on another planet stays hidden until the view moves.
-          if (!selected && (!insideViewport(pos.x, titleY, width, height, viewport, chromeHeightRef.current) || !clearOfDots(itemId, pos.x, titleY, width, height))) continue;
-          boxes.push({id: key, x: pos.x, y: titleY, width, height, priority});
-          if (snippetsOn && !entryItem.item.node.untitled && entryItem.item.snippet) {
-            const snippetY = titleY + height / 2 + 4 + SNIPPET_BOX.height / 2;
-            if (insideViewport(pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport, chromeHeightRef.current) && clearOfDots(itemId, pos.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
-              boxes.push({id: `${key}#s`, x: pos.x, y: snippetY, width: SNIPPET_BOX.width, height: SNIPPET_BOX.height, priority: priority - 1});
-          }
+          labels.push({id: key, itemId, x: pos.x, y: pos.y, width, height, priority, entryItem});
+        }
+        pendingStars.push({snippetsOn, font, lineHeight, starRadiusPx, dots, labels});
+      }
+    }
+    // Planet titles: up to 8 fixed anchors around the dot (below, above, right, left, then the diagonals)
+    // before a label gives up — a star's own name (already in `boxes`) still always wins the spot it sits on.
+    const resolved = resolveLabels(boxes, LABEL_PAD_PX);
+    const anchors = new Map<string, LabelAnchor>();
+    for (const star of pendingStars) {
+      const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
+        !star.dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
+      const allowed = (id: string, x: number, y: number, width: number, height: number): boolean =>
+        selectedKeyRef.current === id || (insideViewport(x, y, width, height, viewport, chromeHeightRef.current) && clearOfDots(id.includes('::') ? splitItemKey(id)[1] : id, x, y, width, height));
+      const placed = placeDotLabels(star.labels, {gap: DOT_PX + LABEL_GAP_PX, pad: LABEL_PAD_PX, blockers: boxes, allowed});
+      for (const label of star.labels) {
+        const at = placed.get(label.id);
+        if (!at) continue;
+        resolved.add(label.id);
+        anchors.set(label.id, at.anchor);
+        // The snippet's CSS sits fixed below the title (it never had its own anchors); only show it when the
+        // title actually landed in its default spot below the dot.
+        if (at.anchor === 'b' && star.snippetsOn && !label.entryItem.item.node.untitled && label.entryItem.item.snippet) {
+          const snippetY = at.y + at.height / 2 + 4 + SNIPPET_BOX.height / 2;
+          const snippetId = `${label.id}#s`;
+          if (insideViewport(at.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport, chromeHeightRef.current) && clearOfDots(label.itemId, at.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
+            resolved.add(snippetId);
         }
       }
     }
-    // A snippet only shows under a shown title.
-    const resolved = resolveLabels(boxes, LABEL_PAD_PX);
-    for (const id of [...resolved]) if (id.endsWith('#s') && !resolved.has(id.slice(0, -2))) resolved.delete(id);
+    labelAnchorsRef.current = anchors;
     labelsRef.current = resolved;
 
     catNodes.sort((a, b) => b.radiusPx - a.radiusPx);
@@ -806,6 +832,21 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     readerPushesRef.current += 1;
   }
 
+  /** Left/Right while a planet's document is open: the previous/next planet of the same star, in the star's
+   * placement order (by id, the same order placeOrbits itself sorts by), wrapping around. Opens the same way
+   * a tap on the planet would. A no-op for the star's own description (no "adjacent planet" to it). */
+  function stepReaderDoc(direction: 1 | -1): void {
+    const open = readerRef.current;
+    if (!open || open.kind !== 'doc' || open.role !== 'planet') return;
+    const items = itemCirclesRef.current.get(open.categoryId);
+    if (!items || items.size === 0) return;
+    const ordered = [...items.values()].sort((a, b) => (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
+    const index = ordered.findIndex(entry => entry.item.versionId === open.versionId);
+    if (index === -1) return;
+    const next = ordered[(index + direction + ordered.length) % ordered.length];
+    openItem(next.item, open.categoryId);
+  }
+
   const onNeighbors = useCallback((neighbors: ReaderNeighbor[]) => {
     relatedRef.current = new Map(neighbors.map(n => [n.versionId, relationLabel(n.predicate)]));
     schedulePaint();
@@ -841,20 +882,31 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     else openReader({kind: 'doc', versionId: doc, role: 'planet', categoryId, categoryLabel: entry.category.label, planetCount: entry.category.directCount}, null, false);
   }
 
-  /** Opens a chosen suggestion the same way a double tap on a planet does: select it, open it in the reader, nothing flies. */
+  /** Choosing a suggestion (Enter or click) flies to the body and selects it, the same way the /search deep
+   * link does — it never opens the reader. Enter again (now that the body is selected) or the usual double
+   * tap opens it from there, same as any other planet or star. */
   async function openSearchResult(node: SpatialNode, categoryId: string): Promise<void> {
     if (node.target.kind !== 'version') return;
     const versionId = node.target.id;
     const entry = categoryId ? categoriesRef.current.get(categoryId) : undefined;
-    if (!entry) { openReader({kind: 'doc', versionId, role: 'planet', categoryId, categoryLabel: '', planetCount: 0}, null, true); return; }
+    if (!entry) { showNotFound(); return; }
+    if (readerRef.current) closeReader(true);
+    flyTo(entry.star, categoryId);
     await fetchItemsFor(categoryId);
     if (!mountedRef.current) return;
     const items = itemCirclesRef.current.get(categoryId);
     const found = items ? [...items.values()].find(candidate => candidate.item.versionId === versionId) : undefined;
-    if (found) { openItem(found.item, categoryId); return; }
+    if (found) {
+      select(itemKey(categoryId, found.item.id));
+      centreOn(found.circle);
+      highlightItem(found.item.id);
+      return;
+    }
     const starDoc = starDocsRef.current.get(categoryId);
-    if (starDoc && starDoc.versionId === versionId) { await openStar(categoryId); return; }
-    openReader({kind: 'doc', versionId, role: 'planet', categoryId, categoryLabel: entry.category.label, planetCount: entry.category.directCount}, null, true);
+    if (starDoc && starDoc.versionId === versionId) { select(categoryId); return; }
+    // Neither a fetched planet nor the star's own document matched (a race with a slow fetch): the fly
+    // already landed on the right star, so at least select it rather than opening anything.
+    select(categoryId);
   }
 
   function setSuggestionsBoth(list: SuggestRow[]): void {
@@ -866,8 +918,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
     setSuggestionsBoth([]);
     setHighlightIndex(-1);
-    setQuery('');
-    queryRef.current = '';
+    // The pill keeps what was typed — choosing a suggestion flies and selects, it does not reset the search.
     await openSearchResult(pick.node, pick.categoryId);
     if (!alwaysVisibleRef.current) scheduleAutoHide();
   }
@@ -931,7 +982,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (!mountedRef.current) return;
       const items = itemCirclesRef.current.get(categoryId);
       const found = items ? [...items.values()].find(candidate => candidate.item.versionId === versionId) : undefined;
-      if (found) select(itemKey(categoryId, found.item.id));
+      if (found) { select(itemKey(categoryId, found.item.id)); centreOn(found.circle); }
       highlightItem(hit.key);
     } catch { if (!controller.signal.aborted) showNotFound(); }
   }
@@ -1083,7 +1134,12 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (!inField && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
-      if (readerRef.current) return; // Reading keys belong to the reader while it is open.
+      if (readerRef.current) {
+        // Reading keys belong to the reader while it is open, except Left/Right, which step to the
+        // adjacent planet's document instead of paging text (Up/Down/Space do that, inside the reader itself).
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); stepReaderDoc(event.key === 'ArrowRight' ? 1 : -1); }
+        return;
+      }
       if (event.key === 'Enter') { event.preventDefault(); activateSelection(); return; }
       if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomCentre(KEY_ZOOM); return; }
       if (event.key === '-') { event.preventDefault(); zoomCentre(1 / KEY_ZOOM); return; }
@@ -1353,6 +1409,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       <button key={id} type="button" className="universe-category" aria-label={`${entry.category.label}, ${entry.kind === 'galaxy' ? '은하' : entry.kind === 'galaxy-star' ? '항성이 있는 은하' : '항성'}`}
         ref={el => bindButton(id, el)} onClick={event => onCategoryClick(id, event)} onFocus={() => select(id)}>
         <span className="universe-category-label">{entry.category.label}</span>
+        <span className="universe-reticle" aria-hidden="true" />
       </button>
     );
   }
@@ -1365,6 +1422,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       <button key={key} type="button" className="universe-item" aria-label={itemLabel(entry.item) || '기록'}
         ref={el => bindButton(key, el)} onClick={event => onItemClick(entry.item, categoryId, event)} onFocus={() => select(key)}>
         <span className="universe-item-dot" aria-hidden="true" />
+        <span className="universe-reticle" aria-hidden="true" />
         <span className="universe-item-title">{itemLabel(entry.item)}</span>
         {!entry.item.node.untitled && <span className="universe-item-snippet">{entry.item.snippet}</span>}
       </button>
@@ -1372,7 +1430,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   }
 
   return (
-    <div className="universe-root" data-reading={reader !== null}>
+    <div className="universe-root" data-reading={reader !== null} data-search-open={searchOpen}>
       <canvas ref={canvasRef} className="universe-canvas" aria-hidden="true" />
       <div ref={containerRef} className="universe-viewport" tabIndex={-1} aria-hidden={reader !== null}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
@@ -1385,8 +1443,10 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         <UniverseReader target={reader} reducedMotion={reducedMotionRef.current}
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
-      {/* Desktop only: a 48px hover strip across the top edge reveals the pill without focusing it. */}
-      {!alwaysVisible && (
+      {/* Desktop only: a 48px hover strip across the top edge reveals the pill without focusing it. Not while
+          reading: it used to sit over the reader's crumb and block the close button; open the pill there only
+          on purpose (/, Cmd/Ctrl+K), and universe.css pushes the crumb down to clear it when it is shown. */}
+      {!alwaysVisible && !reader && (
         <div className="universe-hover-zone" aria-hidden="true" onMouseEnter={revealSearch} onMouseLeave={onSearchHoverLeave} />
       )}
       {!alwaysVisible && (

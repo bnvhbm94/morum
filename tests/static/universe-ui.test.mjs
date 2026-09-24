@@ -85,3 +85,10 @@ test('/versions/:id folds the path id in as if it were ?doc=, so the universe op
   assert.match(source, /initialDoc\?:\s*string/);
   assert.match(source, /params\.set\('doc',\s*initialDoc\)/);
 });
+
+test('while the reader is open, Left/Right step to the adjacent planet instead of panning the field', () => {
+  assert.match(source, /function stepReaderDoc\(/);
+  assert.match(source, /event\.key === 'ArrowLeft' \|\| event\.key === 'ArrowRight'.*stepReaderDoc\(/);
+  // The star's placement order is by id, the same order placeOrbits itself sorts planets by.
+  assert.match(source, /a\.item\.id < b\.item\.id \? -1 : a\.item\.id > b\.item\.id \? 1 : 0/);
+});

@@ -27,6 +27,34 @@
 .universe-category[data-open="true"] { cursor: default; }
 .universe-category[data-open="true"] .universe-category-label { cursor: pointer; pointer-events: none; }
 
+/* Selection reticle: four short corner ticks, never a closed ring, so it never reads as the reserved "relation"
+   channel (a full ring). Drawn as four fixed-size corner marks (baked into small SVGs, not CSS gradients) at
+   the corners of a box sized by --reticle-r, which the positioning code sets per body: for a planet that is a
+   constant 6px outside its 3px dot (see .universe-item below); for a star it is set in JS, 6px outside the
+   star's own core light (or its hit circle, for a plain galaxy with no core light of its own). */
+.universe-reticle {
+  position: absolute; left: 50%; top: 50%; translate: -50% -50%;
+  width: calc(var(--reticle-r, 9px) * 2); height: calc(var(--reticle-r, 9px) * 2);
+  pointer-events: none; opacity: 0; transition: opacity 160ms ease;
+  background-repeat: no-repeat; background-size: 10px 10px;
+  background-position: top left, top right, bottom left, bottom right;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect x='0' y='0' width='6' height='1' fill='%23f1ecff' fill-opacity='0.8'/%3E%3Crect x='0' y='0' width='1' height='6' fill='%23f1ecff' fill-opacity='0.8'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect x='4' y='0' width='6' height='1' fill='%23f1ecff' fill-opacity='0.8'/%3E%3Crect x='9' y='0' width='1' height='6' fill='%23f1ecff' fill-opacity='0.8'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect x='0' y='9' width='6' height='1' fill='%23f1ecff' fill-opacity='0.8'/%3E%3Crect x='0' y='4' width='1' height='6' fill='%23f1ecff' fill-opacity='0.8'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect x='4' y='9' width='6' height='1' fill='%23f1ecff' fill-opacity='0.8'/%3E%3Crect x='9' y='4' width='1' height='6' fill='%23f1ecff' fill-opacity='0.8'/%3E%3C/svg%3E");
+}
+.universe-item .universe-reticle { --reticle-r: 9px; }
+.universe-category[data-selected="true"] .universe-reticle, .universe-category:focus-visible .universe-reticle,
+.universe-item[data-selected="true"] .universe-reticle, .universe-item:focus-visible .universe-reticle { opacity: 1; }
+@keyframes universe-reticle-spin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: no-preference) {
+  .universe-category[data-selected="true"] .universe-reticle, .universe-category:focus-visible .universe-reticle,
+  .universe-item[data-selected="true"] .universe-reticle, .universe-item:focus-visible .universe-reticle {
+    animation: universe-reticle-spin 4s linear infinite;
+  }
+}
+
 .universe-category-label {
   position: absolute; top: 50%; left: 50%; translate: -50% calc(-50% + var(--name-dy, 0px)); max-width: 34%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
@@ -76,12 +104,21 @@
   color: #f1ecff; text-align: center; transition: opacity 200ms ease;
 }
 .universe-item-title {
+  /* Default anchor: below the dot (data-anchor="b", or unset). labels.ts tries 7 more fixed spots around the
+     dot before a title gives up; positionButton writes the winner as data-anchor on the button. */
   top: calc(50% + 12px); width: max-content; max-width: var(--label-max, 12rem); overflow: hidden; word-break: keep-all;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
   font-size: var(--label-size, .84rem); line-height: var(--label-line, 18px);
   text-shadow: 0 0 4px #0c0910, 0 0 10px rgb(12 9 16 / .9);
 }
+.universe-item[data-anchor="t"] .universe-item-title { top: calc(50% - 12px); left: 50%; translate: -50% -100%; }
+.universe-item[data-anchor="r"] .universe-item-title { top: 50%; left: calc(50% + 12px); translate: 0 -50%; }
+.universe-item[data-anchor="l"] .universe-item-title { top: 50%; left: calc(50% - 12px); translate: -100% -50%; }
+.universe-item[data-anchor="br"] .universe-item-title { top: calc(50% + 12px); left: calc(50% + 12px); translate: 0 0; }
+.universe-item[data-anchor="bl"] .universe-item-title { top: calc(50% + 12px); left: calc(50% - 12px); translate: -100% 0; }
+.universe-item[data-anchor="tr"] .universe-item-title { top: calc(50% - 12px); left: calc(50% + 12px); translate: 0 -100%; }
+.universe-item[data-anchor="tl"] .universe-item-title { top: calc(50% - 12px); left: calc(50% - 12px); translate: -100% -100%; }
 .universe-item-snippet {
   top: calc(50% + 16px + var(--label-line, 18px) * var(--label-lines, 1)); width: 14rem; max-width: 60vw; color: #c9c3d6;
   font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui, sans-serif;
@@ -113,6 +150,12 @@
 }
 .universe-reader::-webkit-scrollbar { display: none; }
 @keyframes universe-reader-in { from { opacity: 0; translate: 0 8px; } }
+/* Desktop: the hover zone that would reveal the pill is off while reading (App.tsx), so the pill only opens
+   here on purpose (/, Cmd/Ctrl+K). It still sits above the reader (z-index 4 > 3) and would otherwise cover
+   the crumb and its 닫기 button, so push the reader's own top inset down by the pill's height while it shows. */
+@media (min-width: 850px) {
+  .universe-root[data-reading="true"][data-search-open="true"] .universe-reader { padding-top: calc(max(8px, env(safe-area-inset-top)) + 72px); }
+}
 .universe-reader-stage { min-height: 100%; display: grid; align-content: start; justify-items: center; gap: 1.25rem; }
 .universe-reader-crumb {
   display: flex; align-items: baseline; gap: 1rem; margin: 0; color: #8f8f8f; font-size: .72rem; letter-spacing: .02em;
