@@ -260,17 +260,40 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     positionButton(key, el, cameraRef.current, viewportRef.current, performance.now());
   }
 
+  /** A2: while the camera is moving, a newly-entered body mounts right away (no debounce — growing the set
+   * is cheap, and "immediately" is the point), but nothing already mounted unmounts until the camera is still,
+   * so this only ever grows the set in that case. Once still, it settles to exactly the computed set on the
+   * usual debounce, which is what lets it shrink back down. */
   function commitDom(cats: string[], items: string[]): void {
-    const catsKey = cats.join(',');
-    const itemsKey = items.join(',');
+    if (!movingRef.current) {
+      const catsKey = cats.join(',');
+      const itemsKey = items.join(',');
+      if (catsKey === committedDomRef.current.cats && itemsKey === committedDomRef.current.items) return;
+      if (domTimerRef.current) clearTimeout(domTimerRef.current);
+      domTimerRef.current = setTimeout(() => {
+        domTimerRef.current = null;
+        committedDomRef.current = {cats: catsKey, items: itemsKey};
+        setDomCategoryIds(cats);
+        setDomItemKeys(items);
+      }, DOM_DEBOUNCE_MS);
+      return;
+    }
+    const nextCats = mergeAdditive(committedDomRef.current.cats, cats, MAX_DOM_CATEGORIES);
+    const nextItems = mergeAdditive(committedDomRef.current.items, items, MAX_DOM_ITEMS);
+    const catsKey = nextCats.join(',');
+    const itemsKey = nextItems.join(',');
     if (catsKey === committedDomRef.current.cats && itemsKey === committedDomRef.current.items) return;
     if (domTimerRef.current) clearTimeout(domTimerRef.current);
-    domTimerRef.current = setTimeout(() => {
-      domTimerRef.current = null;
-      committedDomRef.current = {cats: catsKey, items: itemsKey};
-      setDomCategoryIds(cats);
-      setDomItemKeys(items);
-    }, DOM_DEBOUNCE_MS);
+    domTimerRef.current = null;
+    committedDomRef.current = {cats: catsKey, items: itemsKey};
+    setDomCategoryIds(nextCats);
+    setDomItemKeys(nextItems);
+  }
+
+  function mergeAdditive(committedKey: string, desired: string[], max: number): string[] {
+    const merged = new Set(committedKey ? committedKey.split(',') : []);
+    for (const id of desired) merged.add(id);
+    return [...merged].slice(0, max);
   }
 
   function positionDomButtons(camera: Camera, viewport: Viewport): void {
@@ -475,14 +498,10 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         // Every planet of the star takes part (not only those on screen), so panning never changes the set.
         const dots: StableStarInput['dots'] = [];
         const labels: StableStarInput['labels'] = [];
-        // Labels are frozen while the camera moves (resolveMotionLabels), so their inputs are only built when still.
-        const buildLabels = !movingRef.current;
+        // Built every frame, moving or not: a new planet entering the viewport (or reaching this stage) must be
+        // able to claim a free anchor immediately (resolveMotionLabels below), not only once the camera settles.
         for (const [itemId, entryItem] of items) {
           const key = itemKey(id, itemId);
-          if (!buildLabels) {
-            if (isVisible(entryItem.circle, camera, viewport)) itemNodes.push({key, radiusPx: screenRadius(entryItem.circle, camera)});
-            continue;
-          }
           dots.push({id: itemId, x: entryItem.circle.x, y: entryItem.circle.y});
           const label = itemLabel(entryItem.item);
           const selected = selectedKeyRef.current === key;
@@ -502,8 +521,10 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         stableStars.push({id, order: entry.star.r, dots, labels});
       }
     }
-    // A1: while the camera is moving, freeze the last computed label anchors/visibility instead of
-    // recomputing them (and the DOM stage/tier sets below) every frame — only the camera transform moves.
+    // A1/A2: while the camera is moving, an existing label never relocates or hides on its own — but a body
+    // that is newly visible this frame (entered the viewport, or just reached this stage) may still take a
+    // free anchor and fade in right away, and a body that left the viewport may fade out; only an actual
+    // collision between two already-shown labels waits for the still-time recompute (resolveMotionLabels).
     const prevLabelState = labelStateRef.current;
     const {state: labelState} = resolveMotionLabels(movingRef.current, prevLabelState, () => {
       const resolved = resolveLabels(boxes, LABEL_PAD_PX);
@@ -548,11 +569,11 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     }
 
     positionDomButtons(camera, viewport);
-    if (!movingRef.current) {
-      catNodes.sort((a, b) => b.radiusPx - a.radiusPx);
-      itemNodes.sort((a, b) => b.radiusPx - a.radiusPx);
-      commitDom(catNodes.slice(0, MAX_DOM_CATEGORIES).map(n => n.id), itemNodes.slice(0, MAX_DOM_ITEMS).map(n => n.key));
-    }
+    // A2: a new item/category entering the mounted DOM set applies even while moving (commitDom only grows the
+    // set in that case); one leaving it only unmounts once the camera is still, same as commitDom always did.
+    catNodes.sort((a, b) => b.radiusPx - a.radiusPx);
+    itemNodes.sort((a, b) => b.radiusPx - a.radiusPx);
+    commitDom(catNodes.slice(0, MAX_DOM_CATEGORIES).map(n => n.id), itemNodes.slice(0, MAX_DOM_ITEMS).map(n => n.key));
 
     const nextCrumb = computeCrumb();
     setCrumbText(prev => (prev === nextCrumb ? prev : nextCrumb));
@@ -944,19 +965,27 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     readerPushesRef.current += 1;
   }
 
-  /** Left/Right while a planet's document is open: the previous/next planet of the same star, in the star's
-   * placement order (by id, the same order placeOrbits itself sorts by), wrapping around. Opens the same way
-   * a tap on the planet would. A no-op for the star's own description (no "adjacent planet" to it). */
-  function stepReaderDoc(direction: 1 | -1): void {
+  /** Arrow keys while a planet's document is open: the nearest planet of the same star *in that direction*,
+   * using the same geometry `directionalNode` uses for explore-mode selection — the planets' world positions,
+   * not screen positions, since the field sits dimmed behind the reader. No wrap-around: if nothing lies in
+   * that direction, this is a no-op. Opens the same way a tap on the planet would, and moves the selection
+   * reticle there too, so closing the reader afterwards shows the visitor where they ended up. A no-op for
+   * the star's own description (no planet to be "adjacent" to). */
+  function stepReaderDoc(direction: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'): void {
     const open = readerRef.current;
     if (!open || open.kind !== 'doc' || open.role !== 'planet') return;
     const items = itemCirclesRef.current.get(open.categoryId);
     if (!items || items.size === 0) return;
-    const ordered = [...items.values()].sort((a, b) => (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
-    const index = ordered.findIndex(entry => entry.item.versionId === open.versionId);
-    if (index === -1) return;
-    const next = ordered[(index + direction + ordered.length) % ordered.length];
-    openItem(next.item, open.categoryId);
+    const current = [...items.values()].find(entry => entry.item.versionId === open.versionId);
+    if (!current) return;
+    const nodes = [...items.values()].map(entry => ({key: entry.item.id, x: entry.circle.x, y: entry.circle.y}));
+    const currentNode = nodes.find(node => node.key === current.item.id);
+    if (!currentNode) return;
+    const next = directionalNode(nodes, currentNode, direction);
+    if (!next) return;
+    const target = items.get(next.key);
+    if (!target) return;
+    openItem(target.item, open.categoryId);
   }
 
   const onNeighbors = useCallback((neighbors: ReaderNeighbor[]) => {
@@ -1294,9 +1323,16 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
       if (readerRef.current) {
-        // Reading keys belong to the reader while it is open, except Left/Right, which step to the
-        // adjacent planet's document instead of paging text (Up/Down/Space do that, inside the reader itself).
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); stepReaderDoc(event.key === 'ArrowRight' ? 1 : -1); }
+        // All four arrows step to the nearest planet in that direction in the field (like explore mode),
+        // instead of paging text — Space/PageUp/PageDown still do that, inside the reader itself. Both this
+        // and the reader's own keydown listener are bound to `window`, so stopImmediatePropagation (not just
+        // stopPropagation, which only affects the next target in the DOM chain) is what keeps the reader from
+        // also treating Up/Down as paragraph steps.
+        if (event.key.startsWith('Arrow')) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          stepReaderDoc(event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown');
+        }
         return;
       }
       if (event.key === 'Enter') { event.preventDefault(); activateSelection(); return; }

@@ -1,14 +1,15 @@
 'use client';
 
 // The document view inside the universe: a planet's record or a star's description, read in place over the
-// field. Same reading experience as the home explorer (title, Up/Down through paragraphs with a fading mark,
-// Space to page), and the same satellites: earlier versions, evidence, declared relations, reviews.
+// field. Same satellites as the home explorer (earlier versions, evidence, declared relations, reviews); Space
+// still pages the text, but Up/Down/Left/Right are claimed by the universe's own keydown listener to step to
+// the nearest planet in that direction in the field instead of paging paragraphs (see stepReaderDoc).
 import {Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 import type {ContentRef, Dossier, QuoteCheckState, Version, VersionView} from '../../contracts/types';
 import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
-import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
+import {clearReadingHighlight, pageReading} from '../reading';
 import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES, type ReviewFocus, type ReviewStance} from '../reading-spans';
 import {hueHex, parseAppearance} from './appearance';
 import {relationLabel} from './labels';
@@ -40,7 +41,6 @@ type Props = {
 export default function UniverseReader({target, reducedMotion, onClose, onOpenVersion, onNeighbors}: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
-  const paragraphRef = useRef(-1);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(target.kind === 'doc');
@@ -48,7 +48,6 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
 
   // Load the document and its satellites; a new target aborts the previous load.
   useEffect(() => {
-    paragraphRef.current = -1;
     clearReadingHighlight();
     setLoaded(null); setError('');
     if (target.kind !== 'doc') { setLoading(false); onNeighbors([]); return; }
@@ -83,7 +82,9 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  // Reading keys. Registered while the reader is open; the universe skips its own arrow handling meanwhile.
+  // Paging keys. Registered while the reader is open. Arrow keys are claimed upstream by the universe's own
+  // keydown listener (stepReaderDoc, bound to `window` before this one) to step to the nearest planet in the
+  // field instead — this listener never sees them.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const focused = event.target instanceof HTMLElement ? event.target : null;
@@ -91,13 +92,6 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
       const scroller = scrollerRef.current, article = articleRef.current;
       if (!scroller || !article) return;
       const smooth = !reducedMotion;
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        const body = article.querySelector<HTMLElement>('.universe-doc-text');
-        if (!body) return;
-        event.preventDefault();
-        paragraphRef.current = stepReadingParagraph({article: scroller, title: article.querySelector<HTMLElement>('.universe-doc-title'), body}, paragraphRef.current, event.key === 'ArrowDown' ? 1 : -1, smooth);
-        return;
-      }
       if (event.key === ' ' || event.key === 'PageDown' || event.key === 'PageUp') {
         event.preventDefault();
         pageReading(scroller, event.key === 'PageUp' || (event.key === ' ' && event.shiftKey) ? -1 : 1, smooth);

@@ -107,9 +107,14 @@ export function placeDotLabels(labels: DotLabel[], opts: {axisGap?: number; diag
   return placed;
 }
 
-// ---- Motion stability (A1): while the camera is moving, the field freezes the last computed label
-// visibility/anchor choice instead of recomputing it every frame — recomputing (and re-fading) only once the
-// camera has been still for STILL_MS. Kept as a pure function so it is unit-testable without any DOM.
+// ---- Motion stability (A1/A2): while the camera is moving, an already-shown label never relocates or hides
+// on its own — its anchor stays exactly what it was. But a label that was not shown before (a body newly in
+// the viewport, or one that just reached this stage) may still appear this frame, taking a free anchor without
+// displacing anyone (computeNext places it against the sticky previous anchors, so it can only land somewhere
+// nothing already-shown is using), and one that drops out (typically because its body left the viewport) may
+// disappear. An actual collision between two already-shown labels is left for the still-time recompute, which
+// calls computeNext with `moving` false and takes its result as-is. Kept as a pure function so it is
+// unit-testable without any DOM.
 export type LabelState = {visible: Set<string>; anchors: Map<string, LabelAnchor>};
 
 export const EMPTY_LABEL_STATE: LabelState = {visible: new Set(), anchors: new Map()};
@@ -127,14 +132,30 @@ export function diffLabelState(prev: LabelState, next: LabelState): Set<string> 
 }
 
 /**
- * The motion-aware label state machine: while `moving` is true, returns `prev` unchanged (frozen) with no
- * changed ids; once still, calls `computeNext` and reports which ids actually changed so the caller can fade
- * only those in.
+ * The motion-aware label state machine. `computeNext` is always called — it is expected to place fresh labels
+ * against the previous anchors as sticky input (as universe.tsx's placeStableLabels call does), so anything
+ * already shown keeps its spot in the result unless it is no longer viable at all.
+ *
+ * Once still, `computeNext`'s result is returned as-is (the usual full recompute, including reconciling any
+ * collision). While moving, the two states are merged: every id already visible in `prev` keeps exactly its
+ * `prev` anchor and stays visible only if `computeNext` still finds it a place at all (so it can still fade out
+ * on leaving the viewport, but never relocates or gets crowded out by a newcomer); every id newly visible in
+ * the fresh result (not in `prev`) is added with the fresh result's own anchor.
  */
 export function resolveMotionLabels(moving: boolean, prev: LabelState, computeNext: () => LabelState): {state: LabelState; changed: Set<string>} {
-  if (moving) return {state: prev, changed: new Set()};
   const next = computeNext();
-  return {state: next, changed: diffLabelState(prev, next)};
+  if (!moving) return {state: next, changed: diffLabelState(prev, next)};
+  const anchors = new Map(prev.anchors);
+  const visible = new Set<string>();
+  for (const id of prev.visible) if (next.visible.has(id)) visible.add(id);
+  for (const id of next.visible) {
+    if (prev.visible.has(id)) continue;
+    visible.add(id);
+    const anchor = next.anchors.get(id);
+    if (anchor) anchors.set(id, anchor);
+  }
+  const state: LabelState = {visible, anchors};
+  return {state, changed: diffLabelState(prev, state)};
 }
 
 // ---- Stable placement (item 8): anchors are chosen in a pan-invariant frame at a quantised zoom, and stick.

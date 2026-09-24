@@ -61,7 +61,6 @@ test('bodies are told apart by role and a document opens in place, not on anothe
   assert.match(reader, /role: 'planet' \| 'star'/);
   assert.match(reader, /star-missing/);
   assert.match(reader, /아직 이 항성의 설명 문서가 없다/);
-  assert.match(reader, /stepReadingParagraph\(/);
   assert.match(styles, /::highlight\(reading-paragraph\)/);
   assert.match(styles, /\.universe-item\[data-related\]/);
   assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -87,11 +86,11 @@ test('/versions/:id folds the path id in as if it were ?doc=, so the universe op
   assert.match(source, /params\.set\('doc',\s*initialDoc\)/);
 });
 
-test('while the reader is open, Left/Right step to the adjacent planet instead of panning the field', () => {
+test('while the reader is open, all four arrows step to the nearest planet in that direction instead of panning the field or paging text', () => {
   assert.match(source, /function stepReaderDoc\(/);
-  assert.match(source, /event\.key === 'ArrowLeft' \|\| event\.key === 'ArrowRight'.*stepReaderDoc\(/);
-  // The star's placement order is by id, the same order placeOrbits itself sorts planets by.
-  assert.match(source, /a\.item\.id < b\.item\.id \? -1 : a\.item\.id > b\.item\.id \? 1 : 0/);
+  assert.match(source, /event\.key\.startsWith\('Arrow'\)/);
+  assert.match(source, /stopImmediatePropagation/);
+  assert.match(source, /directionalNode\(nodes, currentNode, direction\)/);
 });
 
 test('A1: while the camera is moving, data-moving is set on the root and CSS disables item/label/reticle transitions', () => {

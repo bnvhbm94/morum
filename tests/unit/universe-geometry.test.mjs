@@ -12,7 +12,7 @@ import {
   PAD,
 } from '../../src/components/universe/layout.ts';
 import {bodyKind, starCircle} from '../../src/components/universe/celestial.ts';
-import {estimateLabelWidth, resolveLabels, placeDotLabels, resolveMotionLabels, diffLabelState, LABEL_ANCHOR_ORDER} from '../../src/components/universe/labels.ts';
+import {estimateLabelWidth, resolveLabels, placeDotLabels, resolveMotionLabels, diffLabelState, placeStableLabels, LABEL_ANCHOR_ORDER} from '../../src/components/universe/labels.ts';
 import {
   worldToScreen,
   screenToWorld,
@@ -395,6 +395,28 @@ test('arrow keys pick the nearest node in that direction', () => {
   assert.equal(directionalNode(nodes, nodes[0], 'ArrowLeft'), null);
 });
 
+// stepReaderDoc (universe.tsx) is the same pure direction picker over a synthetic star's planets, in world
+// coordinates (no screen/camera involved — the field is dimmed behind the reader): a planet's own world x/y,
+// among the other planets orbiting the same star.
+test('reader arrows: the direction picker over a synthetic star finds the nearest planet in world space, all four ways, with no wrap-around', () => {
+  const star = [
+    {key: 'open', x: 0, y: 0},
+    {key: 'east', x: 40, y: 2},
+    {key: 'west', x: -30, y: -1},
+    {key: 'north', x: 3, y: -50},
+    {key: 'south', x: -2, y: 60},
+    {key: 'far-east', x: 500, y: 0},
+  ];
+  const open = star[0];
+  assert.equal(directionalNode(star, open, 'ArrowRight').key, 'east');
+  assert.equal(directionalNode(star, open, 'ArrowLeft').key, 'west');
+  assert.equal(directionalNode(star, open, 'ArrowUp').key, 'north');
+  assert.equal(directionalNode(star, open, 'ArrowDown').key, 'south');
+  // A lone planet with nothing further along an axis: no-op (null), not a wrap to the opposite side.
+  const pair = [{key: 'only', x: 0, y: 0}, {key: 'east', x: 10, y: 0}];
+  assert.equal(directionalNode(pair, pair[0], 'ArrowLeft'), null);
+});
+
 test('a named centre child takes the middle whatever its mass', () => {
   const parent = {x: 0, y: 0, r: 1000};
   const children = [{id: 'big', mass: 40}, {id: 'guide', mass: 6}, {id: 'mid', mass: 12}];
@@ -573,18 +595,30 @@ test('labels: 30 planets in a 400px field — most get a placed, non-overlapping
 
 // ---- Motion stability (A1/A4): the frozen-during-motion, recompute-when-still state machine. Pure and
 // DOM-free, so it is tested directly rather than through the paint loop.
-test('resolveMotionLabels: moving=true freezes the previous state and reports no changes', () => {
+test('resolveMotionLabels: moving=true keeps every already-visible label at its exact previous anchor', () => {
   const prev = {visible: new Set(['a', 'b']), anchors: new Map([['a', 'b'], ['b', 't']])};
-  let calls = 0;
-  const {state, changed} = resolveMotionLabels(true, prev, () => { calls += 1; return {visible: new Set(['a']), anchors: new Map([['a', 'l']])}; });
-  assert.equal(calls, 0, 'computeNext must not run while the camera is moving');
-  assert.equal(state, prev, 'the frozen state is returned unchanged (same reference)');
-  assert.equal(changed.size, 0);
+  // computeNext (as universe.tsx calls it) would relocate "b" to 'r' and add a newcomer 'c'; anchor changes to
+  // an already-visible label must not take effect while moving.
+  const fresh = {visible: new Set(['a', 'b', 'c']), anchors: new Map([['a', 'b'], ['b', 'r'], ['c', 'l']])};
+  const {state, changed} = resolveMotionLabels(true, prev, () => fresh);
+  assert.equal(state.anchors.get('a'), 'b');
+  assert.equal(state.anchors.get('b'), 't', 'an already-visible label keeps its own previous anchor, not the fresh one');
+  assert.equal(state.anchors.get('c'), 'l', 'a newcomer takes the fresh placement');
+  assert.deepEqual([...state.visible].sort(), ['a', 'b', 'c']);
+  assert.deepEqual([...changed].sort(), ['c']);
 });
 
-test('resolveMotionLabels: moving=false recomputes once the camera is still', () => {
+test('resolveMotionLabels: moving=true lets an already-visible label disappear when it no longer fits at all (e.g. it left the viewport)', () => {
+  const prev = {visible: new Set(['a', 'b']), anchors: new Map([['a', 'b'], ['b', 't']])};
+  const fresh = {visible: new Set(['a']), anchors: new Map([['a', 'b']])};
+  const {state, changed} = resolveMotionLabels(true, prev, () => fresh);
+  assert.deepEqual([...state.visible], ['a']);
+  assert.deepEqual([...changed], ['b']);
+});
+
+test('resolveMotionLabels: moving=false recomputes as-is once the camera is still (including reconciling collisions)', () => {
   const prev = {visible: new Set(['a']), anchors: new Map([['a', 'b']])};
-  const next = {visible: new Set(['a', 'c']), anchors: new Map([['a', 'b'], ['c', 'r']])};
+  const next = {visible: new Set(['a', 'c']), anchors: new Map([['a', 'r'], ['c', 'r']])};
   const {state} = resolveMotionLabels(false, prev, () => next);
   assert.equal(state, next);
 });
@@ -598,4 +632,33 @@ test('resolveMotionLabels/diffLabelState: only labels whose visibility or anchor
   assert.deepEqual([...diffLabelState(withD, next)].sort(), ['b', 'c', 'd']);
   const {changed} = resolveMotionLabels(false, withD, () => next);
   assert.deepEqual([...changed].sort(), ['b', 'c', 'd']);
+});
+
+// A2: while moving, a fresh compute (built the way universe.tsx builds it — placeStableLabels seeded with the
+// previous anchors as sticky input) that adds a new body to the set must place that newcomer somewhere, and
+// leave every already-visible label's anchor untouched.
+test('resolveMotionLabels: while moving, adding a new body to the set yields a placement for it and identical anchors for all existing ones', () => {
+  const star = {x: 0, y: 0, r: 100};
+  const scale = 1;
+  const existingPlanets = Array.from({length: 6}, (_, i) => {
+    const angle = (i / 6) * Math.PI * 2;
+    return {id: `p${i}`, x: star.x + Math.cos(angle) * 40, y: star.y + Math.sin(angle) * 40};
+  });
+  const buildStars = planets => [{
+    id: 'star', order: star.r,
+    dots: planets.map(p => ({id: p.id, x: p.x, y: p.y})),
+    labels: planets.map(p => ({id: p.id, dotId: p.id, x: p.x, y: p.y, width: 20, height: 12, priority: 1})),
+  }];
+  const gaps = {axisGap: 10, diagGap: 9, pad: 6, dotPx: 3};
+  const before = placeStableLabels(buildStars(existingPlanets), scale, gaps);
+  const prev = {visible: new Set(before.keys()), anchors: before};
+  const newcomer = {id: 'new', x: star.x, y: star.y - 60};
+  const computeNext = () => {
+    const anchors = placeStableLabels(buildStars([...existingPlanets, newcomer]), scale, {...gaps, prev: before});
+    return {visible: new Set(anchors.keys()), anchors};
+  };
+  const {state, changed} = resolveMotionLabels(true, prev, computeNext);
+  for (const [id, anchor] of before) assert.equal(state.anchors.get(id), anchor, `${id} must keep its exact previous anchor while moving`);
+  assert.ok(state.visible.has('new'), 'the newcomer must be placed, not held back until the camera is still');
+  assert.deepEqual([...changed], ['new']);
 });
