@@ -8,7 +8,7 @@
 import {useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent} from 'react';
 import type {Camera, Circle, UniverseCategory, UniverseItem, UniverseSource, Viewport} from './types';
 import {createTopicSource} from '../../lib/universe-data';
-import {loadSpatialSearch} from '../../lib/spatial-data';
+import {loadSpatialSearch, type SpatialNode} from '../../lib/spatial-data';
 import {rootCircle, packChildren, placeOrbits, HOLE_KEY, ORBIT_INNER} from './layout';
 import {worldToScreen, screenToWorld, zoomAt, panBy, fitCircle, interpolate, inertiaStep, clampScale} from './camera';
 import {screenRadius, stageFor, stageScale, isVisible, pickFetchTargets, directionalNode, itemsOpen, STAGE_PX, type Stage, type FetchCandidate} from './lod';
@@ -24,6 +24,7 @@ type ItemEntry = {item: UniverseItem; circle: Circle};
 type PointerState = {id: number; startX: number; startY: number; lastX: number; lastY: number; lastAt: number; moved: boolean; samples: {dx: number; dy: number; dt: number; at: number}[]};
 type PinchState = {dist: number; mid: {x: number; y: number}};
 type Highlight = {itemId: string; until: number};
+type SuggestRow = {node: SpatialNode; categoryId: string; starLabel: string};
 
 const DRAG_THRESHOLD = 7;
 const STILL_MS = 120;
@@ -31,6 +32,14 @@ const DOM_DEBOUNCE_MS = 80;
 const HIGHLIGHT_MS = 1600;
 const NOT_FOUND_MS = 2000;
 const IDLE_MS = 2000;
+/** Desktop: the pill reveals when the pointer reaches this many pixels of the top edge. */
+const HOVER_ZONE_PX = 48;
+/** Desktop: after the pointer leaves the zone/pill, an empty and unfocused pill hides after this delay. */
+const HOVER_HIDE_MS = 600;
+/** Suggestions wait this long after the last keystroke before searching, and need at least this many characters. */
+const SUGGEST_DEBOUNCE_MS = 250;
+const SUGGEST_MIN_CHARS = 2;
+const SUGGEST_MAX_RESULTS = 8;
 const MAX_DOM_CATEGORIES = 150;
 const MAX_DOM_ITEMS = 400;
 const MAX_FETCH = 4;
@@ -166,6 +175,14 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const fetchControllersRef = useRef<Set<AbortController>>(new Set());
   const searchControllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  /** Desktop reveal: true while the pointer sits over the top hover zone or the pill itself. */
+  const hoveringSearchRef = useRef(false);
+  const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestControllerRef = useRef<AbortController | null>(null);
+  const suggestionsRef = useRef<SuggestRow[]>([]);
+  const inputFocusedRef = useRef(false);
+  const queryRef = useRef('');
 
   const [domCategoryIds, setDomCategoryIds] = useState<string[]>([]);
   const [domItemKeys, setDomItemKeys] = useState<string[]>([]);
@@ -182,6 +199,8 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const searchPrevFocusRef = useRef<HTMLElement | null>(null);
   const [composing, setComposing] = useState(false);
   const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<SuggestRow[]>([]);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const [reader, setReader] = useState<ReaderTarget | null>(null);
 
   // ---- Canvas and DOM placement -------------------------------------------------------------------------
@@ -533,6 +552,33 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     stillTimerRef.current = setTimeout(() => { stillTimerRef.current = null; void fetchNearby(); }, STILL_MS);
   }
 
+  function clearHoverHideTimer(): void {
+    if (hoverHideTimerRef.current) { clearTimeout(hoverHideTimerRef.current); hoverHideTimerRef.current = null; }
+  }
+
+  /** Desktop: reveal the pill (no focus) while the pointer is over the top zone or the pill itself. */
+  function revealSearch(): void {
+    hoveringSearchRef.current = true;
+    clearHoverHideTimer();
+    if (!searchOpenRef.current) { searchOpenRef.current = true; setSearchOpen(true); }
+  }
+
+  /** Desktop: 600ms after the pointer leaves (or the input blurs), hide the pill if it is still empty and unfocused. */
+  function scheduleAutoHide(): void {
+    clearHoverHideTimer();
+    hoverHideTimerRef.current = setTimeout(() => {
+      hoverHideTimerRef.current = null;
+      if (hoveringSearchRef.current || inputFocusedRef.current || queryRef.current.trim() !== '') return;
+      searchOpenRef.current = false;
+      setSearchOpen(false);
+    }, HOVER_HIDE_MS);
+  }
+
+  function onSearchHoverLeave(): void {
+    hoveringSearchRef.current = false;
+    scheduleAutoHide();
+  }
+
   /** Desktop: reveal the search pill and focus it, remembering what had focus so it can be restored on hide. */
   function openSearch(): void {
     if (!searchOpenRef.current) {
@@ -549,6 +595,13 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     if (!searchOpenRef.current) return;
     searchOpenRef.current = false;
     setSearchOpen(false);
+    clearHoverHideTimer();
+    hoveringSearchRef.current = false;
+    if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
+    suggestControllerRef.current?.abort();
+    suggestionsRef.current = [];
+    setSuggestions([]);
+    setHighlightIndex(-1);
     const prev = searchPrevFocusRef.current;
     searchPrevFocusRef.current = null;
     if (prev && document.contains(prev)) prev.focus();
@@ -788,6 +841,75 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     else openReader({kind: 'doc', versionId: doc, role: 'planet', categoryId, categoryLabel: entry.category.label, planetCount: entry.category.directCount}, null, false);
   }
 
+  /** Opens a chosen suggestion the same way a double tap on a planet does: select it, open it in the reader, nothing flies. */
+  async function openSearchResult(node: SpatialNode, categoryId: string): Promise<void> {
+    if (node.target.kind !== 'version') return;
+    const versionId = node.target.id;
+    const entry = categoryId ? categoriesRef.current.get(categoryId) : undefined;
+    if (!entry) { openReader({kind: 'doc', versionId, role: 'planet', categoryId, categoryLabel: '', planetCount: 0}, null, true); return; }
+    await fetchItemsFor(categoryId);
+    if (!mountedRef.current) return;
+    const items = itemCirclesRef.current.get(categoryId);
+    const found = items ? [...items.values()].find(candidate => candidate.item.versionId === versionId) : undefined;
+    if (found) { openItem(found.item, categoryId); return; }
+    const starDoc = starDocsRef.current.get(categoryId);
+    if (starDoc && starDoc.versionId === versionId) { await openStar(categoryId); return; }
+    openReader({kind: 'doc', versionId, role: 'planet', categoryId, categoryLabel: entry.category.label, planetCount: entry.category.directCount}, null, true);
+  }
+
+  function setSuggestionsBoth(list: SuggestRow[]): void {
+    suggestionsRef.current = list;
+    setSuggestions(list);
+  }
+
+  async function chooseSuggestion(pick: SuggestRow): Promise<void> {
+    if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
+    setSuggestionsBoth([]);
+    setHighlightIndex(-1);
+    setQuery('');
+    queryRef.current = '';
+    await openSearchResult(pick.node, pick.categoryId);
+    if (!alwaysVisibleRef.current) scheduleAutoHide();
+  }
+
+  /** The suggestion dropdown's search: reuses loadSpatialSearch (one call per debounce), resolving each
+   * hit's star name via source.pathTo, which is an in-memory lookup once the home page has loaded — no
+   * extra network calls beyond the search itself. */
+  async function runSuggest(trimmed: string): Promise<void> {
+    const source = sourceRef.current;
+    if (!source) return;
+    suggestControllerRef.current?.abort();
+    const controller = new AbortController();
+    suggestControllerRef.current = controller;
+    try {
+      const result = await loadSpatialSearch(trimmed, {scope: 'current', include_context: false}, controller.signal);
+      if (controller.signal.aborted || !mountedRef.current) return;
+      const versionNodes = result.nodes.filter((node): node is SpatialNode & {target: {kind: 'version'; id: string}} => node.target.kind === 'version').slice(0, SUGGEST_MAX_RESULTS);
+      const rows = await Promise.all(versionNodes.map(async node => {
+        const path = await source.pathTo(node.target.id, controller.signal).catch(() => []);
+        const categoryId = path[path.length - 1] ?? '';
+        const starLabel = categoryId ? categoriesRef.current.get(categoryId)?.category.label ?? '' : '';
+        return {node, categoryId, starLabel};
+      }));
+      if (controller.signal.aborted || !mountedRef.current) return;
+      setSuggestionsBoth(rows);
+      setHighlightIndex(-1);
+    } catch { if (!controller.signal.aborted) setSuggestionsBoth([]); }
+  }
+
+  /** Debounced entry point for the suggestion list: cleared below the minimum character count. */
+  function scheduleSuggest(text: string): void {
+    if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
+    const trimmed = text.trim();
+    if (trimmed.length < SUGGEST_MIN_CHARS) {
+      suggestControllerRef.current?.abort();
+      setSuggestionsBoth([]);
+      setHighlightIndex(-1);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(() => { searchDebounceRef.current = null; void runSuggest(trimmed); }, SUGGEST_DEBOUNCE_MS);
+  }
+
   async function runSearch(text: string): Promise<void> {
     const trimmed = text.trim();
     const source = sourceRef.current;
@@ -954,15 +1076,6 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       const inField = target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
       if (event.key === '/' && !inField) { event.preventDefault(); openSearch(); return; }
       if (!inField && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
-      // Desktop only: start typing anywhere with nothing focused and the pill opens with that first character already in it.
-      if (!inField && !alwaysVisibleRef.current && !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing &&
-        event.key.length === 1 && event.key !== '+' && event.key !== '=' && event.key !== '-' &&
-        (document.activeElement === document.body || document.activeElement === containerRef.current)) {
-        event.preventDefault();
-        openSearch();
-        setQuery(event.key);
-        return;
-      }
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
       if (readerRef.current) return; // Reading keys belong to the reader while it is open.
@@ -1140,18 +1253,91 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     openItem(item, categoryId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape' && !alwaysVisible) { event.preventDefault(); event.stopPropagation(); closeSearch(); return; }
+  function onSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'Escape') {
+      event.preventDefault(); event.stopPropagation();
+      // Escape closes the suggestion list first; a second Escape hides the pill (desktop only — the docked pill stays).
+      if (suggestionsRef.current.length > 0) { setSuggestionsBoth([]); setHighlightIndex(-1); return; }
+      if (!alwaysVisible) closeSearch();
+      return;
+    }
+    if (event.key === 'ArrowDown' && suggestionsRef.current.length > 0) {
+      event.preventDefault();
+      setHighlightIndex(index => (index + 1) % suggestionsRef.current.length);
+      return;
+    }
+    if (event.key === 'ArrowUp' && suggestionsRef.current.length > 0) {
+      event.preventDefault();
+      setHighlightIndex(index => (index <= 0 ? suggestionsRef.current.length - 1 : index - 1));
+      return;
+    }
     if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing) return;
     event.preventDefault();
-    void runSearch(query);
-  }, [alwaysVisible, composing, query]); // eslint-disable-line react-hooks/exhaustive-deps
+    const list = suggestionsRef.current;
+    if (list.length > 0) { void chooseSuggestion(list[highlightIndex >= 0 && highlightIndex < list.length ? highlightIndex : 0]); return; }
+    const trimmed = query.trim();
+    if (trimmed.length >= SUGGEST_MIN_CHARS) {
+      void runSuggest(trimmed).then(() => {
+        const found = suggestionsRef.current;
+        if (found.length > 0) void chooseSuggestion(found[0]); else showNotFound();
+      });
+    }
+  }
 
-  // Touch/narrow: docked pill, hidden only while idle-and-unfocused (unchanged). Desktop: hidden until explicitly opened,
-  // and unlike the docked pill it stays open over the reader rather than disappearing with the rest of the chrome.
+  // Touch/narrow: docked pill, hidden only while idle-and-unfocused (unchanged). Desktop: hidden until the pointer
+  // reaches the top edge or the pill is opened explicitly, and unlike the docked pill it stays open over the
+  // reader rather than disappearing with the rest of the chrome.
   const dockHidden = alwaysVisible ? (pillHidden && !inputFocused) || reader !== null : !searchOpen;
-  const desktopHint = '검색 / · 항성 두 번 눌러 들어가기 · 행성 두 번 눌러 읽기';
-  const narrowHint = '항성을 두 번 눌러 들어가고, 행성을 두 번 눌러 읽습니다';
+  const suggestListId = 'universe-suggestions';
+
+  function renderSuggestions() {
+    return (
+      <ul className="universe-suggestions" id={suggestListId} role="listbox">
+        {suggestions.map((item, index) => (
+          <li key={item.node.key} id={`universe-suggestion-${index}`} role="option" aria-selected={index === highlightIndex}
+            className="universe-suggestion" data-highlighted={index === highlightIndex}
+            onMouseEnter={() => setHighlightIndex(index)}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => void chooseSuggestion(item)}>
+            <span className="universe-suggestion-title">{item.node.title?.trim() || '(제목 없음)'}</span>
+            {item.starLabel && <span className="universe-suggestion-star">{item.starLabel}</span>}
+            {item.node.snippet && <span className="universe-suggestion-snippet">{item.node.snippet}</span>}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  function renderSearchPill(position: 'top' | 'bottom') {
+    return (
+      <div className={`universe-search universe-search--${position}`} data-hidden={dockHidden}
+        onMouseEnter={position === 'top' ? revealSearch : undefined}
+        onMouseLeave={position === 'top' ? onSearchHoverLeave : undefined}>
+        <label className="universe-sr-only" htmlFor="universe-query">우주 검색</label>
+        <input id="universe-query" ref={searchInputRef} value={query} autoComplete="off" placeholder="검색"
+          role="combobox" aria-expanded={suggestions.length > 0} aria-controls={suggestListId} aria-autocomplete="list"
+          aria-activedescendant={highlightIndex >= 0 ? `universe-suggestion-${highlightIndex}` : undefined}
+          onChange={event => { const value = event.target.value; queryRef.current = value; setQuery(value); scheduleSuggest(value); }}
+          onFocus={() => {
+            inputFocusedRef.current = true;
+            setInputFocused(true);
+            clearHoverHideTimer();
+            if (!searchOpenRef.current) { searchOpenRef.current = true; setSearchOpen(true); }
+          }}
+          onBlur={() => {
+            inputFocusedRef.current = false;
+            setInputFocused(false);
+            setSuggestionsBoth([]);
+            setHighlightIndex(-1);
+            if (!alwaysVisible) scheduleAutoHide();
+          }}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={event => { setComposing(false); const value = event.currentTarget.value; queryRef.current = value; setQuery(value); scheduleSuggest(value); }}
+          onKeyDown={onSearchKeyDown} />
+        {suggestions.length > 0 && renderSuggestions()}
+      </div>
+    );
+  }
 
   function renderCategoryButton(id: string) {
     const entry = categoriesRef.current.get(id);
@@ -1192,19 +1378,19 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         <UniverseReader target={reader} reducedMotion={reducedMotionRef.current}
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
+      {/* Desktop only: a 48px hover strip across the top edge reveals the pill without focusing it. */}
+      {!alwaysVisible && (
+        <div className="universe-hover-zone" aria-hidden="true" onMouseEnter={revealSearch} onMouseLeave={onSearchHoverLeave} />
+      )}
+      {!alwaysVisible && (
+        <div className="universe-search-top">{renderSearchPill('top')}</div>
+      )}
       <div ref={chromeRef} className="universe-chrome">
-        <p className="universe-crumb" aria-live="polite" data-hidden={reader !== null}
-          data-hint={!notFound && !crumbText}>{notFound ? '찾지 못했다' : crumbText || (alwaysVisible ? narrowHint : desktopHint)}</p>
-        <div className="universe-search" data-hidden={dockHidden}>
-          <label className="universe-sr-only" htmlFor="universe-query">우주 검색</label>
-          <input id="universe-query" ref={searchInputRef} value={query} autoComplete="off" placeholder="검색"
-            onChange={event => setQuery(event.target.value)}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => { setInputFocused(false); if (!alwaysVisible && query.trim() === '') closeSearch(); }}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={event => { setComposing(false); setQuery(event.currentTarget.value); }}
-            onKeyDown={onSearchKeyDown} />
-        </div>
+        {/* Desktop: no visible hint or caption line (owner decision); the caption stays for screen readers only. */}
+        <p className={`universe-crumb${alwaysVisible ? '' : ' universe-sr-only'}`} aria-live="polite" data-hidden={alwaysVisible ? reader !== null : false}>
+          {notFound ? '찾지 못했다' : crumbText}
+        </p>
+        {alwaysVisible && renderSearchPill('bottom')}
       </div>
     </div>
   );
