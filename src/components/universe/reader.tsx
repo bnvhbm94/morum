@@ -126,18 +126,17 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
         cursorRef.current = next;
         // The cursor moves the view, not just a highlight: the current item is brought to the middle of the
         // reader and the rest of its column steps back (CSS on aria-current), so the eye follows the move.
-        const behavior: ScrollBehavior = smooth ? 'smooth' : 'auto';
         if (next.column === 'center') {
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           article.focus({preventScroll: true});
-          article.scrollIntoView({block: 'nearest', behavior});
+          glideScroll(scroller, article, 'nearest', smooth);
         } else {
           const els = next.column === 'left' ? leftEls : rightEls;
           const el = els[next.index];
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           el?.setAttribute('aria-current', 'true');
           el?.focus({preventScroll: true});
-          el?.scrollIntoView({block: 'center', behavior});
+          if (el) glideScroll(scroller, el, 'center', smooth);
         }
         return;
       }
@@ -160,6 +159,30 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
 
   return (
     <div ref={scrollerRef} className="universe-reader" role="dialog" aria-label={crumb}
+      onClickCapture={event => {
+        // Like explore mode: the first click on a satellite moves the view to it and makes it current; only a
+        // click on the current satellite (or Enter) opens it. Clicking the article brings the cursor home.
+        const scroller = scrollerRef.current; if (!scroller) return;
+        const target = event.target instanceof HTMLElement ? event.target : null; if (!target) return;
+        if (target.closest('a[href]')) return;
+        const sat = target.closest<HTMLElement>('.universe-satellite');
+        if (sat) {
+          if (sat.getAttribute('aria-current') === 'true') return;
+          event.preventDefault(); event.stopPropagation();
+          const side = leftAsideRef.current?.contains(sat) ? 'left' : rightAsideRef.current?.contains(sat) ? 'right' : null;
+          if (!side) return;
+          const index = satellitesIn(side === 'left' ? leftAsideRef.current : rightAsideRef.current).indexOf(sat);
+          cursorRef.current = {column: side, index: Math.max(0, index)};
+          clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
+          sat.setAttribute('aria-current', 'true'); sat.focus({preventScroll: true});
+          glideScroll(scroller, sat, 'center', !reducedMotion);
+          return;
+        }
+        if (articleRef.current && articleRef.current.contains(target) && cursorRef.current.column !== 'center') {
+          cursorRef.current = INITIAL_READER_CURSOR;
+          clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
+        }
+      }}
       onClick={event => { if (event.target === event.currentTarget || (event.target instanceof HTMLElement && event.target.classList.contains('universe-reader-stage'))) onClose(); }}>
       <div className="universe-reader-stage">
         <p className="universe-reader-crumb">
@@ -221,6 +244,34 @@ function satellite(key: string, kind: string, caption: string, body: ReactNode, 
 // versions, internal evidence with a source, relations, meanings with a linked concept) and the plain divs
 // (external evidence, unlinked evidence/meanings, the review summary below) — the cursor visits every one of
 // them, DOM order is column order, and Enter decides what (if anything) to do by what is actually inside.
+
+
+// ---- View movement (mirrors the field's glide: easeInOutCubic, 420-900ms by distance) --------------------
+function easeInOutCubic(t: number): number { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+let glideRaf: number | null = null;
+/** Scroll the reader so `el` sits at the middle (or just inside the view for 'nearest'), animated like a camera flight. */
+function glideScroll(scroller: HTMLElement, el: HTMLElement, block: 'center' | 'nearest', smooth: boolean): void {
+  const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect();
+  const elTop = er.top - sr.top + scroller.scrollTop;
+  let target: number;
+  if (block === 'center') target = elTop - (sr.height - er.height) / 2;
+  else if (er.top < sr.top) target = elTop - 24;
+  else if (er.bottom > sr.bottom) target = elTop + er.height - sr.height + 24;
+  else return;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  target = Math.max(0, Math.min(max, target));
+  const from = scroller.scrollTop, delta = target - from;
+  if (glideRaf !== null) { cancelAnimationFrame(glideRaf); glideRaf = null; }
+  if (!smooth || Math.abs(delta) < 2) { scroller.scrollTop = target; return; }
+  const duration = Math.max(420, Math.min(900, 420 + Math.abs(delta) / 4));
+  const start = performance.now();
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / duration);
+    scroller.scrollTop = from + delta * easeInOutCubic(t);
+    glideRaf = t < 1 ? requestAnimationFrame(tick) : null;
+  };
+  glideRaf = requestAnimationFrame(tick);
+}
 
 function satellitesIn(aside: HTMLElement | null): HTMLElement[] {
   return aside ? Array.from(aside.querySelectorAll<HTMLElement>('.universe-satellite')) : [];
