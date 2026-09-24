@@ -20,10 +20,38 @@ else {
   await t.test('canonical_url normalizes scheme/host/port/path/query/fragment',async()=>{
    const q=async u=>(await admin.query('select knowledge.canonical_url($1) v',[u])).rows[0].v;
    assert.equal(await q('HTTPS://Example.com:443/a/b/?utm_source=x&keep=1&fbclid=y#frag'),'https://example.com/a/b?keep=1');
-   assert.equal(await q('http://example.com:80/'),'http://example.com/');
-   assert.equal(await q('http://example.com/a/'),'http://example.com/a');
-   assert.equal(await q('http://example.com/'),'http://example.com/');
+   assert.equal(await q('http://example.com:80/'),'https://example.com/');
+   assert.equal(await q('http://example.com/a/'),'https://example.com/a');
+   assert.equal(await q('http://example.com/'),'https://example.com/');
    assert.equal(await q('ftp://example.com/'),null);
+  });
+
+  await t.test('canonical_url (0115): scheme folds http->https, www/mobile/export/dx host rewrites, arXiv and DOI identity',async()=>{
+   const q=async u=>(await admin.query('select knowledge.canonical_url($1) v',[u])).rows[0].v;
+   assert.equal(await q('https://fda.gov/x'),'https://fda.gov/x');
+   assert.equal(await q('https://www.fda.gov/x'),'https://fda.gov/x');
+   assert.equal(await q('http://www.fda.gov/x/'),'https://fda.gov/x');
+   assert.equal(await q('https://www2.fda.gov/x'),'https://fda.gov/x');
+
+   assert.equal(await q('https://en.wikipedia.org/wiki/Caffeine'),'https://en.wikipedia.org/wiki/Caffeine');
+   assert.equal(await q('https://en.m.wikipedia.org/wiki/Caffeine'),'https://en.wikipedia.org/wiki/Caffeine');
+
+   const arxivForm='https://arxiv.org/abs/2305.17493';
+   assert.equal(await q(arxivForm),arxivForm);
+   assert.equal(await q('https://arxiv.org/abs/2305.17493v3'),arxivForm);
+   assert.equal(await q('https://arxiv.org/pdf/2305.17493'),arxivForm);
+   assert.equal(await q('https://arxiv.org/pdf/2305.17493v3'),arxivForm);
+   assert.equal(await q('https://arxiv.org/pdf/2305.17493.pdf'),arxivForm);
+   assert.equal(await q('https://arxiv.org/pdf/2305.17493v3.pdf'),arxivForm);
+   assert.equal(await q('https://export.arxiv.org/abs/2305.17493'),arxivForm);
+   assert.equal(await q('https://arxiv.org/abs/2305.17493?context=cs'),arxivForm);
+   assert.equal(await q('https://arxiv.org/abs/hep-th/9901001'),'https://arxiv.org/abs/hep-th/9901001');
+
+   const doiForm='https://doi.org/10.1038/s42256-023-00726-1';
+   assert.equal(await q(doiForm),doiForm);
+   assert.equal(await q('https://dx.doi.org/10.1038/S42256-023-00726-1'),doiForm);
+
+   assert.notEqual(await q('https://example.com/a'),await q('https://example.com/b'));
   });
 
   await t.test('quote_check covers every state including ellipsis fragments',async()=>{
@@ -137,6 +165,22 @@ else {
    assert.deepEqual(blindView.agreements.reviews,[]);
    assert.equal(blindView.agreements.agree_keyed,1);assert.equal(blindView.agreements.agree_anonymous,1);
    assert.equal(blindView.agreements.truncated,false);
+  });
+
+  await t.test('kb_dossier (0114): evidence attached to an anchor of the version is included alongside version-targeted evidence',async()=>{
+   const target=record('SYNTHETIC anchor evidence dossier target body with enough length for an anchor');
+   const tv=(await mutate(a,'record.create',target,anon)).data.version;
+   const start=Array.from(tv.body_text).indexOf('a'),selector=canonicalSelector(tv.body_text,start,start+1);
+   const anchor=(await mutate(a,'anchor.create',{version_id:tv.id,body_sha256:tv.body_sha256,selector},anon)).data;
+   const src=(await mutate(a,'source.create',{url:null,title:null,submitted_text:'Only this exact text is present here.',published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:true},anon)).data;
+   const versionEv=(await mutate(a,'evidence.create',{target:ref('version',tv.id),basis:{kind:'external',source_id:src.id,quote:'nothing like this exists anywhere',explanation:'SYNTHETIC version evidence'}},anon)).data;
+   const anchorEv=(await mutate(a,'evidence.create',{target:ref('anchor',anchor.id),basis:{kind:'external',source_id:src.id,quote:'nothing like this exists anywhere',explanation:'SYNTHETIC anchor evidence'}},anon)).data;
+
+   const dossier=await rpc(a,'kb_dossier',{p_query:{target:ref('version',tv.id)}});
+   const ids=dossier.evidence.map(e=>e.id);
+   assert.ok(ids.includes(versionEv.id),'version-targeted evidence present');
+   assert.ok(ids.includes(anchorEv.id),'anchor-targeted evidence present');
+   assert.equal(dossier.omitted.evidence,0);
   });
 
   await t.test('kb_attention: quote_not_found ranks before unreviewed, reasons filter, counts, seed determinism',async()=>{
