@@ -134,6 +134,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           enterIndex = refY === null ? 0 : nearestIndexToY(els, refY);
         }
         const next = moveReaderCursor(cursor, arrow, counts, enterIndex);
+        // At the end of a column (or an empty one) the cursor does not move, so the view must not move either.
+        if (next.column === cursor.column && next.index === cursor.index) return;
         cursorRef.current = next;
         // The cursor moves the view, not just a highlight: the current item is brought to the middle of the
         // reader and the rest of its column steps back (CSS on aria-current), so the eye follows the move.
