@@ -9,6 +9,7 @@ const source = await readFile(new URL('../../src/components/universe/universe.ts
 const starfield = await readFile(new URL('../../src/components/universe/starfield.ts', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../../src/components/universe/universe.css', import.meta.url), 'utf8');
 const reader = await readFile(new URL('../../src/components/universe/reader.tsx', import.meta.url), 'utf8');
+const readerCursor = await readFile(new URL('../../src/components/universe/reader-cursor.ts', import.meta.url), 'utf8');
 
 test('the universe renders at / and stays reachable at the legacy /universe and /versions/:id addresses', () => {
   assert.match(homePage, /<Universe\s*\/>/);
@@ -86,11 +87,20 @@ test('/versions/:id folds the path id in as if it were ?doc=, so the universe op
   assert.match(source, /params\.set\('doc',\s*initialDoc\)/);
 });
 
-test('while the reader is open, all four arrows step to the nearest planet in that direction instead of panning the field or paging text', () => {
-  assert.match(source, /function stepReaderDoc\(/);
-  assert.match(source, /event\.key\.startsWith\('Arrow'\)/);
-  assert.match(source, /stopImmediatePropagation/);
-  assert.match(source, /directionalNode\(nodes, currentNode, direction\)/);
+test('while the reader is open, the universe leaves every key to the reader instead of stepping the field\'s planet picker', () => {
+  assert.doesNotMatch(source, /function stepReaderDoc\(/);
+  assert.doesNotMatch(source, /stepReaderDoc\(/);
+  assert.match(source, /if \(readerRef\.current\) return;/);
+});
+
+test('the reader has its own keyboard cursor over its three columns (left satellites, centre article, right satellites), pure and no-wrap', () => {
+  assert.match(readerCursor, /export type ReaderColumn = 'left' \| 'center' \| 'right';/);
+  assert.match(readerCursor, /export function moveReaderCursor\(/);
+  assert.match(reader, /from '\.\/reader-cursor'/);
+  assert.match(reader, /event\.key\.startsWith\('Arrow'\)/);
+  assert.match(reader, /stopImmediatePropagation/);
+  assert.match(reader, /stepReadingParagraph/);
+  assert.match(reader, /activateSatellite/);
 });
 
 test('A1: while the camera is moving, data-moving is set on the root and CSS disables item/label/reticle transitions', () => {

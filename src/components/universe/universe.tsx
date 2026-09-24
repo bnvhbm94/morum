@@ -965,29 +965,6 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     readerPushesRef.current += 1;
   }
 
-  /** Arrow keys while a planet's document is open: the nearest planet of the same star *in that direction*,
-   * using the same geometry `directionalNode` uses for explore-mode selection — the planets' world positions,
-   * not screen positions, since the field sits dimmed behind the reader. No wrap-around: if nothing lies in
-   * that direction, this is a no-op. Opens the same way a tap on the planet would, and moves the selection
-   * reticle there too, so closing the reader afterwards shows the visitor where they ended up. A no-op for
-   * the star's own description (no planet to be "adjacent" to). */
-  function stepReaderDoc(direction: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'): void {
-    const open = readerRef.current;
-    if (!open || open.kind !== 'doc' || open.role !== 'planet') return;
-    const items = itemCirclesRef.current.get(open.categoryId);
-    if (!items || items.size === 0) return;
-    const current = [...items.values()].find(entry => entry.item.versionId === open.versionId);
-    if (!current) return;
-    const nodes = [...items.values()].map(entry => ({key: entry.item.id, x: entry.circle.x, y: entry.circle.y}));
-    const currentNode = nodes.find(node => node.key === current.item.id);
-    if (!currentNode) return;
-    const next = directionalNode(nodes, currentNode, direction);
-    if (!next) return;
-    const target = items.get(next.key);
-    if (!target) return;
-    openItem(target.item, open.categoryId);
-  }
-
   const onNeighbors = useCallback((neighbors: ReaderNeighbor[]) => {
     relatedRef.current = new Map(neighbors.map(n => [n.versionId, relationLabel(n.predicate)]));
     schedulePaint();
@@ -1322,19 +1299,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (!inField && !readerRef.current && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
-      if (readerRef.current) {
-        // All four arrows step to the nearest planet in that direction in the field (like explore mode),
-        // instead of paging text — Space/PageUp/PageDown still do that, inside the reader itself. Both this
-        // and the reader's own keydown listener are bound to `window`, so stopImmediatePropagation (not just
-        // stopPropagation, which only affects the next target in the DOM chain) is what keeps the reader from
-        // also treating Up/Down as paragraph steps.
-        if (event.key.startsWith('Arrow')) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          stepReaderDoc(event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown');
-        }
-        return;
-      }
+      // The reader owns every other key while it is open (its own column cursor for the arrows, Enter to
+      // activate, Space/PageUp/PageDown to page) via its own window keydown listener — nothing left to do here.
+      if (readerRef.current) return;
       if (event.key === 'Enter') { event.preventDefault(); activateSelection(); return; }
       if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomCentre(KEY_ZOOM); return; }
       if (event.key === '-') { event.preventDefault(); zoomCentre(1 / KEY_ZOOM); return; }

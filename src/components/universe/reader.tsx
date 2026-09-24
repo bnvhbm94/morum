@@ -1,20 +1,23 @@
 'use client';
 
 // The document view inside the universe: a planet's record or a star's description, read in place over the
-// field. Same satellites as the home explorer (earlier versions, evidence, declared relations, reviews); Space
-// still pages the text, but Up/Down/Left/Right are claimed by the universe's own keydown listener to step to
-// the nearest planet in that direction in the field instead of paging paragraphs (see stepReaderDoc).
+// field. Same satellites as the home explorer (earlier versions, evidence, declared relations, reviews). Its
+// own keyboard cursor lives entirely inside its own columns (left satellites, the centre article, right
+// satellites) — arrows never open another document by themselves, unlike the field's own Arrow navigation in
+// explore mode, which this reader never touches. See moveReaderCursor for the column/index state machine.
 import {Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 import type {ContentRef, Dossier, QuoteCheckState, Version, VersionView} from '../../contracts/types';
 import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
-import {clearReadingHighlight, pageReading} from '../reading';
+import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
 import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES, type ReviewFocus, type ReviewStance} from '../reading-spans';
 import {hueHex, parseAppearance} from './appearance';
 import {relationLabel} from './labels';
+import {INITIAL_READER_CURSOR, moveReaderCursor, type ReaderArrowKey, type ReaderCursor} from './reader-cursor';
 
 export {relationLabel};
+export {INITIAL_READER_CURSOR, moveReaderCursor, type ReaderColumn, type ReaderCursor, type ReaderArrowKey} from './reader-cursor';
 
 export type ReaderTarget =
   | {kind: 'doc'; versionId: string; role: 'planet' | 'star'; categoryId: string; categoryLabel: string; planetCount: number}
@@ -41,6 +44,10 @@ type Props = {
 export default function UniverseReader({target, reducedMotion, onClose, onOpenVersion, onNeighbors}: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
+  const leftAsideRef = useRef<HTMLElement>(null);
+  const rightAsideRef = useRef<HTMLElement>(null);
+  const cursorRef = useRef<ReaderCursor>(INITIAL_READER_CURSOR);
+  const paragraphRef = useRef(-1);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(target.kind === 'doc');
@@ -49,6 +56,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
   // Load the document and its satellites; a new target aborts the previous load.
   useEffect(() => {
     clearReadingHighlight();
+    cursorRef.current = INITIAL_READER_CURSOR;
+    paragraphRef.current = -1;
     setLoaded(null); setError('');
     if (target.kind !== 'doc') { setLoading(false); onNeighbors([]); return; }
     const controller = new AbortController();
@@ -82,9 +91,10 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  // Paging keys. Registered while the reader is open. Arrow keys are claimed upstream by the universe's own
-  // keydown listener (stepReaderDoc, bound to `window` before this one) to step to the nearest planet in the
-  // field instead — this listener never sees them.
+  // Paging, arrow-cursor and Enter keys, registered while the reader is open. Bound to `window` before the
+  // universe's own keydown listener (see universe.tsx), which now leaves every key alone while the reader is
+  // open — the cursor below is the reader's own, entirely inside its own columns; it never opens another
+  // document by itself. stopImmediatePropagation on the arrows also keeps the field from panning underneath.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const focused = event.target instanceof HTMLElement ? event.target : null;
@@ -95,6 +105,45 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
       if (event.key === ' ' || event.key === 'PageDown' || event.key === 'PageUp') {
         event.preventDefault();
         pageReading(scroller, event.key === 'PageUp' || (event.key === ' ' && event.shiftKey) ? -1 : 1, smooth);
+        return;
+      }
+      if (event.key.startsWith('Arrow')) {
+        const arrow = event.key as ReaderArrowKey;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const cursor = cursorRef.current;
+        // Up/Down in the centre column: restore the old paragraph-stepping behaviour instead of moving the
+        // cursor (moveReaderCursor is a no-op here for exactly this case).
+        if (cursor.column === 'center' && (arrow === 'ArrowUp' || arrow === 'ArrowDown')) {
+          const body = article.querySelector<HTMLElement>('.universe-doc-text');
+          if (body) paragraphRef.current = stepReadingParagraph({article: scroller, title: article.querySelector<HTMLElement>('.universe-doc-title'), body}, paragraphRef.current, arrow === 'ArrowDown' ? 1 : -1, smooth);
+          return;
+        }
+        const leftEls = satellitesIn(leftAsideRef.current), rightEls = satellitesIn(rightAsideRef.current);
+        const counts = {left: leftEls.length, right: rightEls.length};
+        const enterIndex = cursor.column === 'center' ? nearestIndex(arrow === 'ArrowLeft' ? leftEls : rightEls, scroller) : 0;
+        const next = moveReaderCursor(cursor, arrow, counts, enterIndex);
+        cursorRef.current = next;
+        if (next.column === 'center') {
+          clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
+          article.focus({preventScroll: true});
+        } else {
+          const els = next.column === 'left' ? leftEls : rightEls;
+          const el = els[next.index];
+          clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
+          el?.setAttribute('aria-current', 'true');
+          el?.focus({preventScroll: true});
+        }
+        return;
+      }
+      if (event.key === 'Enter') {
+        const cursor = cursorRef.current;
+        if (cursor.column === 'center') return; // Enter on the centre article does nothing
+        const els = satellitesIn(cursor.column === 'left' ? leftAsideRef.current : rightAsideRef.current);
+        const el = els[cursor.index];
+        if (!el) return;
+        event.preventDefault();
+        activateSatellite(el);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -124,7 +173,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
         {target.kind === 'doc' && error && <p className="universe-reader-note" role="alert">{error}</p>}
         {target.kind === 'doc' && loaded && (
           <div className="universe-reader-grid">
-            <aside className="universe-satellites" data-side="left" aria-label="이력과 근거">{leftSatellites(loaded, onOpenVersion)}</aside>
+            <aside ref={leftAsideRef} className="universe-satellites" data-side="left" aria-label="이력과 근거">{leftSatellites(loaded, onOpenVersion)}</aside>
             <article ref={articleRef} className="universe-doc" tabIndex={-1} aria-labelledby="universe-doc-title">
               {portrait(loaded.view.version.attributes)}
               {loaded.view.version.title
@@ -142,8 +191,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
                 <a href={`/records/${encodeURIComponent(loaded.view.version.record_id)}/history`}>고친 이력</a>
               </nav>
             </article>
-            <aside className="universe-satellites" data-side="right" aria-label="관계와 검토">
-              {reviewTable(loaded.dossier)}
+            <aside ref={rightAsideRef} className="universe-satellites" data-side="right" aria-label="관계와 검토">
+              {reviewSatellite(loaded.dossier)}
               {rightSatellites(loaded, onOpenVersion)}
             </aside>
           </div>
@@ -159,7 +208,48 @@ function satellite(key: string, kind: string, caption: string, body: ReactNode, 
   const content = <><b>{caption}</b>{body}</>;
   return onClick
     ? <button key={key} type="button" className="universe-satellite" data-kind={kind} onClick={onClick}>{content}</button>
-    : <div key={key} className="universe-satellite" data-kind={kind}>{content}</div>;
+    : <div key={key} className="universe-satellite" data-kind={kind} tabIndex={-1}>{content}</div>;
+}
+
+// ---- Keyboard-cursor helpers (used by the keydown handler above; kept out of the component body since they
+// only ever touch the DOM, never React state). `.universe-satellite` covers both the buttons above (earlier
+// versions, internal evidence with a source, relations, meanings with a linked concept) and the plain divs
+// (external evidence, unlinked evidence/meanings, the review summary below) — the cursor visits every one of
+// them, DOM order is column order, and Enter decides what (if anything) to do by what is actually inside.
+
+function satellitesIn(aside: HTMLElement | null): HTMLElement[] {
+  return aside ? Array.from(aside.querySelectorAll<HTMLElement>('.universe-satellite')) : [];
+}
+
+/** Which satellite to land on when the cursor enters a side column from the centre: the one nearest, top to
+ * bottom, to the scroller's current vertical middle — not always the first, so the cursor picks up roughly
+ * where the visitor was already reading rather than jumping to the top of a long column. */
+function nearestIndex(elements: HTMLElement[], scroller: HTMLElement): number {
+  if (!elements.length) return 0;
+  const scrollerRect = scroller.getBoundingClientRect();
+  const mid = scrollerRect.top + scrollerRect.height / 2;
+  let best = 0, bestDist = Infinity;
+  elements.forEach((el, index) => {
+    const rect = el.getBoundingClientRect();
+    const dist = Math.abs((rect.top + rect.bottom) / 2 - mid);
+    if (dist < bestDist) { bestDist = dist; best = index; }
+  });
+  return best;
+}
+
+function clearSatelliteCurrent(aside: HTMLElement | null): void {
+  aside?.querySelectorAll('[aria-current]').forEach(el => el.removeAttribute('aria-current'));
+}
+
+/** Enter on a focused satellite: a real `<button>` (earlier version, internal evidence, relation, linked
+ * meaning) is simply clicked, which runs the same onClick the mouse would. A plain `<div>` that holds a link
+ * (external evidence's source, the "더 있음" cap's full-context link) has that link clicked instead — for
+ * external evidence this opens the source in a new tab, since the anchor itself already carries
+ * target="_blank". A satellite with neither (the review summary, an evidence/meaning item with no source) has
+ * nothing to activate: its `title` says so, and Enter does nothing beyond the scroll-into-view focus already gave it. */
+function activateSatellite(el: HTMLElement): void {
+  if (el instanceof HTMLButtonElement) { el.click(); return; }
+  el.querySelector<HTMLAnchorElement>('a[href]')?.click();
 }
 
 // ---- Quote-check line (B §2.1): what the server's mechanical comparison found, worded against the
@@ -235,6 +325,16 @@ function rightSatellites(loaded: Loaded, open: (versionId: string) => void): Rea
 function cap(items: ReactNode[], needsMore: boolean, versionId: string): ReactNode[] {
   if (items.length <= SATELLITE_CAP && !needsMore) return items;
   return [...items.slice(0, SATELLITE_CAP - 1), satellite('more', 'more', '… 더 있음', <a href={`/versions/${encodeURIComponent(versionId)}`}>전체 맥락</a>)];
+}
+
+/** The review summary as one cursor stop in the right column: a plain, non-actionable satellite (Enter does
+ * nothing beyond the scroll-into-view its focus already gives it — the `title` says so for anyone hovering or
+ * using a screen reader that surfaces it) wrapping the table itself. Only rendered when there is a dossier to
+ * summarise, same condition reviewTable already used. */
+function reviewSatellite(dossier: Dossier | null): ReactNode {
+  const table = reviewTable(dossier);
+  if (!table) return null;
+  return <div key="review" className="universe-satellite" data-kind="review" tabIndex={-1} title="검토 요약 — Enter로 활성화되지 않음, 화면에 스크롤만 됩니다.">{table}</div>;
 }
 
 // ---- Review table (B §2.2): focus × stance, pinned at the top of the right column regardless of the
