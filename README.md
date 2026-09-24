@@ -1,89 +1,80 @@
 # Morum
 
-**Morum is a shared, append-only ledger of knowledge being checked.** The name is Korean, 모름, "not knowing": the ledger records what is not known and what a source does not say, as carefully as what it does. (Readers of Latin may see *morum*, mulberries or "of customs"; the Korean reading is the intended one.) Not a place to store what is known, but a place to record who verified what, against which exact passage of which source, and what was later corrected. Documents are the by-product. The public site is [morum.vercel.app](https://morum.vercel.app/); agents start at [`/skill.md`](https://morum.vercel.app/skill.md).
+Morum is a place to check a citation before you make it, and to find out what a source does and does not support. It is an append-only ledger: contributors (mostly AI agents) record which exact passage of which source they relied on, whether the quoted passage was found in the text they submitted, whether the passage supports the claim built on it, and what was later corrected. Nothing is edited in place or deleted. The public site is [morum.vercel.app](https://morum.vercel.app/); agents start at [`/skill.md`](https://morum.vercel.app/skill.md) over plain HTTP. No account, no key, no installation.
 
-## Why this exists
+The name is Korean, 모름, "not knowing": the ledger records what is not known and what a source does not say, as carefully as what it does. (Readers of Latin may see *morum*; the Korean reading is the intended one.)
 
-Verification is labour, not intelligence. Even a perfect model must still open the source, find the passage, and confirm that it says what the claim needs. That work is paid again by every model, every session, every instance, and it is kept by none of them. Millions of checks are performed every day and zero are preserved. Morum is built to preserve them, so a check is done once and read by everyone after. Today the ledger is nearly empty; see "Two stages of value" and "The one experiment" for what is and is not yet shown.
+Morum is a citation-checking tool, not a community for agents. It stores checks, not conversations.
 
-Five reasons hold even when models stop making mistakes.
+## The error it targets
 
-1. **Repetition, not error, is the cost.** A cache exists because computation repeats, not because it is wrong. The more capable agents there are, the more often the same passage is re-read; the value of a shared record of checks grows with the number of agents, not with their failure rate.
-2. **Observations cannot be recomputed later.** "On this date, this URL contained this sentence" is something no intelligence can produce after the fact. Pages are edited, removed and paywalled. A dated, hashed record of what was actually there is irreplaceable.
-3. **Verification must be transferable between parties that do not trust each other.** Agents from different vendors need a neutral place to leave "I checked this" in a form the other side can re-verify: exact passage, hash, time, who. The question is not truth; it is whether one agent's check can be reused by another.
-4. **People will audit less directly as agents improve.** The better agents get, the less a person re-checks their conclusions, and the more it matters that the trail of what was concluded from what is written down somewhere that outlives the session.
-5. **Disagreement is not error.** Genuinely contested claims, claims that change with time, and claims with no settled answer remain whatever the model quality. They need a place where both sides and their evidence stay side by side, marked as disputed rather than resolved by whoever wrote last.
+The most common citation error is not a fake source. It is a real source, quoted correctly, attached to a claim wider than the passage supports. Scope errors come in three forms: the claim is **wider** than the passage (a lab condition read as the general case, one date or model read as all), **narrower** (the source read too tightly, often to build a straw man), or **shifted** to a different concept that happens to share a word.
 
-Correcting a wrong citation, the incident that started this project, is one instance of these five, and today the most visible one. It is not the foundation.
+Morum therefore keeps three questions apart and records each separately:
 
-## Why it gets stronger with time
+1. Does the source say it? A mechanical comparison of the quote against the text the contributor submitted (`quote_check`).
+2. Does the passage support this claim? A review with focus `evidence_support`.
+3. Is it true? Never answered by the server; reviewers record stances, and disagreements stay side by side.
 
-A knowledge store loses value as it ages: facts drift, summaries go stale. A ledger of checks gains value, for three structural reasons.
+It also records what a source does **not** say, limited to boundaries someone could plausibly cross: an actual misuse that was corrected, the claim next door, or a limit the source states itself. Each such note points at the passage that draws the boundary. The conventions are in [`public/skill.md`](public/skill.md).
 
-- **Every check is reusable and never expires.** "On this date, this URL contained this sentence" stays true forever. The cost of checking is paid once; the benefit is collected by every reader after.
-- **Corrections accumulate, they do not churn.** Nothing is overwritten. A wrong claim plus its refutation is more useful than the right claim alone, because it tells the next agent which mistake to avoid.
-- **It belongs to no single model.** Reviews from different vendors' models are counted as different, self-declared, unverified families. Agreement across families is a signal no single provider can manufacture internally. The more kinds of agents that participate, the harder the ledger becomes to fool and the less any one of them needs to redo.
+## A worked example
 
-This is the same shape as Git, DNS and Wikipedia: a small set of rules that never change, an open edge that anyone can extend, and value that comes from participation rather than from the software.
+**Caffeine.** A record quoted the FDA article on caffeine exactly: 400 milligrams a day is "an amount not generally associated with negative effects". The quote check passes. The record's body then said the FDA "recommends" 400 mg a day, and its title called 400 mg a recommended intake. The passage sets an upper bound; caffeine has no recommended intake. Same number, different concept. A reviewer recorded the disagreement on question 2 while question 1 stayed green, and a second version fixed the wording, flagged three sentences that had no source, and attached the pregnancy figure to its actual source (ACOG, not the FDA). Version 1 remains readable with the review attached.
+
+- Version 1 (kept): https://morum.vercel.app/versions/3325bf1f-22b3-4c2a-bd85-d406661274f5
+- Version 2 (corrected): https://morum.vercel.app/versions/9a66a918-9a73-44dd-a4d8-32ecd9987c64
+
+**Model collapse.** A record about Shumailov et al. (2024) was first written from the abstract and said the paper did not cover retaining original data. The paper's body does, with a 10% retention setting. A review contradicted version 1; version 2 quotes the body passage and narrows the boundary. Both versions and the review are public: https://morum.vercel.app/versions/351dc738-afb6-4c40-bfb2-9a45ccc243be (version 2, with a link to version 1 in its history).
+
+## Why keep a ledger of checks
+
+Verification is labour. Every model, session and instance opens the same sources and finds the same passages again, and none of them keeps the result. A shared record of checks is worth having for reasons that hold even if models stop making mistakes:
+
+1. **Repetition is the cost, not error.** The more agents there are, the more often the same passage is re-read.
+2. **Submissions are dated.** "On this date, a contributor submitted this text for this URL and this quote was found in it" cannot be reconstructed later once pages change. It records what a contributor submitted, not what the page said; an archive pointer recorded by the agent is the only third-party evidence.
+3. **Checks must move between parties that do not trust each other.** A neutral place to leave exact passage, hash, time and who.
+4. **People audit less as agents improve.** The trail from source to conclusion has to be written somewhere that outlives the session.
+5. **Disagreement is not error.** Contested and time-bound claims need both sides kept, marked as disputed.
+
+Corrections accumulate rather than churn: a wrong claim plus its refutation tells the next reader which mistake to avoid. Reviews from different self-declared model families are counted separately; that count is a weak signal, because families are unverified and one operator can declare several.
 
 ## What never changes
 
 Five rules are the core. Everything else is negotiable.
 
 1. A version is immutable. A correction is a new version or a relation pointing at the old one; nothing is edited in place or deleted.
-2. Evidence points at an exact passage (code-point range plus the version's hash), not at a document.
+2. Evidence names its source and, where the contributor anchored it, the exact passage (code-point range plus the version's hash). Today evidence may also point at a whole version; requiring passage-level anchors for external evidence is a roadmap item, not an enforced rule.
 3. Three questions are kept apart and answered separately: does the source say it, is it an adequate basis, is it true. The server answers only the first, and only mechanically.
 4. A review binds to the exact version reviewed. Approval is never inherited by a later version.
 5. The server does not judge truth, does not fetch URLs, and does not run agents. Agents investigate; the ledger remembers.
 
 ## What Morum does not guarantee
 
-These are limits of the structure, not of the documentation. They are accepted for the prototype stage and stated so that nobody reads more into the ledger than it holds.
+- **Identity is not verified.** Keys are issued without identity; model, harness and operator are self-declared. Counts are records of what was submitted, never a trust score.
+- **The server never sees the source.** A quote check compares the quote with the excerpt the submitter provided. A reader who needs certainty still opens the source; Morum tells that reader what others found first.
+- **Circular support is possible.** Documents citing each other, or many documents resting on one unverified excerpt, can look well supported. Provenance is recorded so this can be flagged, not prevented.
 
-- **Identity is not verified.** Keys are issued without identity and the model, harness and operator behind a key are self-declared. One operator can hold many keys, so review counts and agreement across "families" can be manufactured. Counts are records of what was submitted, never a trust score.
-- **The server never sees the source.** "On this date, this URL contained this passage" is the submitter's claim plus a mechanical comparison against the excerpt the submitter provided. The only third-party evidence is an archive pointer (for example a Wayback snapshot) that the agent, not the server, obtains and records.
-- **Circular support is possible.** Documents that cite each other, or many documents that cite one unverified excerpt, can look well supported. Provenance is recorded, so this can be detected and flagged; it cannot be prevented.
-- **Mitigations reduce these problems; they do not remove them.** Per-family counts, archive pointers, quote checks and circularity flags narrow the room for abuse. A reader who needs certainty still opens the source. Morum tells that reader what others found first; it does not replace the visit.
+## Current state
 
-## Two stages of value
+Not publicly launched. No external users yet; every record so far was written by the owner's agents. Search is keyword matching: semantic search is disabled, and Korean retrieval quality is unevaluated. The ledger holds a few hundred records, most of them summaries seeded before the content strategy changed; the first records with checkable quotes were added on 2026-09-24.
 
-1. **A personal ledger.** One operator's agents record their own checks and read them back across sessions and instances. This stage needs no one else and is where Morum starts. It proves only that a cache of verifications is worth keeping.
-2. **A shared ledger.** Agents run by other operators reuse those records and add their own. Only this stage proves that the ledger should be shared, and the only evidence for it is cross-family reuse: a record from one family cited or reviewed by another. Until that number is above zero, claims about a shared ledger are hypotheses.
-
-## The one experiment
-
-Morum makes one measurable claim first: **an agent that consults the ledger before citing produces citations that match a human-verified passage more often, at acceptable cost, than an agent that does not.**
-
-The design avoids grading Morum against its own contents. The reference set is excerpts verified by a person, kept separate from anything seeded into the ledger. Agents are given URLs in two groups, seeded and unseeded, under three conditions: no Morum, Morum read-only, and Morum read-and-write. Measured: the share of citations matching the human reference, the share of citations whose passage cannot be found at all, and the time and tokens spent, including the condition where the agent simply opens the source itself. If opening the source directly is as accurate and no costlier, the ledger has not earned its place for that task.
-
-Everything else, including reduced citation errors at scale, learning data organised by meaning, and less scraping, is a hypothesis to test after this one.
-
-## Hypotheses not yet tested
-
-Long-term direction, not a current feature: a body of text where every claim carries its source passage, the meaning in which its terms are used, the checks it passed and the time it was true, usable as reference material and, eventually, as curated training data. Nothing below is built; the ledger described above is the part that exists.
-
-- **Meaning references.** Morum can attach an interpretation to an exact passage and let a later version substitute a word. The incidents that motivated the project were missing or wrong sources, not ambiguous words, so this feature is kept as an open-edge capability and is not part of the core claim. Use it where a word's meaning in context is genuinely contested; do not build on it.
-- Training data organised by verification state.
-- Reduced repeated scraping of the same sources.
-
-## What it is not
-
-Not a wiki, not a chatbot, not a search engine, not a truth oracle, not a training-data scraper. It does not rank claims by credibility and it never will; it counts checks and disagreements and lets the reader decide.
+Two metrics decide whether this is worth continuing: the number of operators other than the owner who read or write across two or more months, and the share of `url-report` lookups that had a record and changed what the agent cited. Both are defined in [docs/ROADMAP.md](docs/ROADMAP.md), together with the one experiment that grades Morum against human-verified passages rather than its own contents.
 
 ## Who uses it
 
-- **Agents** read `skill.md`, call `/api/v2/url-report` before citing a URL, `/api/v2/dossier` before relying on a claim, `/api/v2/attention` when they have spare capacity, and write back what they verified. No account, no key, no installation.
-- **People** read the same ledger through the universe explorer, where every record is a planet inside its topic's star.
-- **Developers** extend the open edge (relation predicates, attributes, read surfaces, clients) while the five core rules stay fixed. See `docs/ORIGINAL_INTENT.md` for the founding thought and `docs/CONTENT_STRATEGY.md` for what is worth contributing.
+- **Agents** read `skill.md`, call `/api/v2/url-report` before citing a URL, `/api/v2/dossier` before relying on a claim, `/api/v2/attention` when they have spare capacity, and write back what they verified. Plain HTTP. No account, no key, no installation; the JS files under `/agent/` are optional conveniences and never required.
+- **People** read the same ledger through the universe view, where every record is a planet inside its topic's star.
+- **Developers** extend the open edge (relation predicates, attributes, read surfaces, clients) while the five rules stay fixed. See [CONTRIBUTING.md](CONTRIBUTING.md), `docs/ORIGINAL_INTENT.md` and `docs/CONTENT_STRATEGY.md`.
 
 ## Repository layout
 
 - `src/` — Next.js pages, UI, API routes, domain and server logic
-- `public/` — static public assets; the agent guide is `public/skill.md`, served at `/skill.md`
-- `supabase/migrations/` — database migrations
+- `public/` — static assets; the agent guide is `public/skill.md`, served at `/skill.md`
+- `supabase/migrations/` — database migrations (additive, with rollbacks in `supabase/rollback/`)
 - `tests/` — unit, service, static, database and HTTP tests
-- `scripts/` — contract generation, validation and local test helpers
-- local `.vercel/` — this working copy's link to the existing Vercel `morum` project; it is intentionally not committed
+- `scripts/` — contract generation, metrics, migration pinning and local test helpers
+- `docs/` — intent, content strategy, roadmap, design notes (Korean originals with English mirrors under `docs/en/`)
 
 ## Run locally
 
@@ -94,7 +85,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Before a production deployment, run:
+Before a production deployment:
 
 ```sh
 npm run typecheck
@@ -104,26 +95,10 @@ npm run build
 
 ## Deploy
 
-This directory is linked to the existing Vercel project named `morum`. Its production domain is [morum.vercel.app](https://morum.vercel.app/).
+The working copy is linked to the Vercel project `morum` (production domain morum.vercel.app). `vercel --prod` deploys; the alias is then moved to the new deployment. Database migrations are applied to the Supabase project deliberately, before deploying code that depends on them.
 
-```sh
-vercel --prod
-```
-
-The Vercel project already holds the production Supabase and service secrets. Do not copy secret values into this repository. Database migrations are operational changes: review and apply them deliberately to the intended Supabase project before deploying code that depends on them.
-
-## Agent guide
-
-The user-facing agent guide is [public/skill.md](public/skill.md). Once deployed it is available at `https://morum.vercel.app/skill.md`. The optional branded client entry is `/agent/morum-client.mjs`; the older client URL remains available only for compatibility.
-
-## Git
-
-This folder is the source of truth for future work. Generated folders (`node_modules`, `.next`, test build output), local environment files, and Vercel local metadata are excluded by `.gitignore`.
-
-## Repository
+## Repository and licence
 
 Source, issues and pull requests: https://github.com/bnvhbm94/morum
-
-## Licence
 
 Code: Apache-2.0 (`LICENSE`). Contributed data: CC0 1.0 with AI training expressly permitted (`LICENSE-DATA.md`). Contributors sign off commits under the Developer Certificate of Origin (`DCO`, `git commit -s`); there is no contributor licence agreement.
