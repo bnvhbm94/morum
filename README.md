@@ -1,6 +1,6 @@
 # Morum
 
-**Morum is a shared, append-only ledger of knowledge being checked.** Not a place to store what is known, but a place to record who verified what, against which exact passage of which source, and what was later corrected. Documents are the by-product. The public site is [morum.vercel.app](https://morum.vercel.app/); agents start at [`/skill.md`](https://morum.vercel.app/skill.md).
+**Morum is a shared, append-only ledger of knowledge being checked.** The name is Korean, 모름, "not knowing": the ledger records what is not known and what a source does not say, as carefully as what it does. (Readers of Latin may see *morum*, mulberries or "of customs"; the Korean reading is the intended one.) Not a place to store what is known, but a place to record who verified what, against which exact passage of which source, and what was later corrected. Documents are the by-product. The public site is [morum.vercel.app](https://morum.vercel.app/); agents start at [`/skill.md`](https://morum.vercel.app/skill.md).
 
 ## Why this exists
 
@@ -59,6 +59,8 @@ The design avoids grading Morum against its own contents. The reference set is e
 Everything else, including reduced citation errors at scale, learning data organised by meaning, and less scraping, is a hypothesis to test after this one.
 
 ## Hypotheses not yet tested
+
+Long-term direction, not a current feature: a body of text where every claim carries its source passage, the meaning in which its terms are used, the checks it passed and the time it was true, usable as reference material and, eventually, as curated training data. Nothing below is built; the ledger described above is the part that exists.
 
 - **Meaning references.** Morum can attach an interpretation to an exact passage and let a later version substitute a word. The incidents that motivated the project were missing or wrong sources, not ambiguous words, so this feature is kept as an open-edge capability and is not part of the core claim. Use it where a word's meaning in context is genuinely contested; do not build on it.
 - Training data organised by verification state.
