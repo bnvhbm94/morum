@@ -149,7 +149,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           el?.setAttribute('aria-current', 'true');
           el?.focus({preventScroll: true});
-          if (el) panStage(stageRef.current, scroller, el, smooth, cursor.column === 'center' ? 'x' : 'both');
+          if (el) panStage(stageRef.current, scroller, el, smooth, 'x');
         }
         return;
       }
@@ -279,11 +279,12 @@ function panStage(stage: HTMLElement | null, scroller: HTMLElement | null, el: H
     const x = sr.left + sr.width / 2 - restCx;
     if (axis === 'both') target = {x, y: sr.top + sr.height / 2 - restCy};
     else {
-      // Keep the current vertical pan; nudge only if the item would sit outside the view (24px margin).
-      const margin = 24, top = er.top - panNow.y + panNow.y, bottom = er.bottom;
+      // Minimal vertical movement: keep the current pan unless the item would sit outside the comfortable
+      // band (15%..85% of the view); then move just enough to bring it to the band's edge.
+      const bandTop = sr.top + sr.height * 0.15, bandBottom = sr.bottom - sr.height * 0.15;
       let y = panNow.y;
-      if (top < sr.top + margin) y += sr.top + margin - top;
-      else if (bottom > sr.bottom - margin) y -= bottom - (sr.bottom - margin);
+      if (er.top < bandTop) y += bandTop - er.top;
+      else if (er.bottom > bandBottom) y -= er.bottom - bandBottom;
       target = {x, y};
     }
   }
