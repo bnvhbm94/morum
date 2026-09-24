@@ -152,6 +152,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
 
   const rafRef = useRef<number | null>(null);
   const flightRafRef = useRef<number | null>(null);
+  const flightResolveRef = useRef<(() => void) | null>(null);
   const inertiaRafRef = useRef<number | null>(null);
   const zoomRafRef = useRef<number | null>(null);
   const zoomPendingRef = useRef(0);
@@ -294,10 +295,16 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         const nameFont = nameFontPx(starRadiusPx);
         el.style.setProperty('--name-size', `${nameFont.toFixed(2)}px`);
         el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
-        // The reticle hugs the star's own core light, not the (much larger) hit circle around it; a plain
-        // galaxy has no core light to hug, so it falls back to the hit circle's own edge.
-        const reticleBase = entry.kind === 'star' || entry.kind === 'galaxy-star' ? starRadiusPx : r;
-        el.style.setProperty('--reticle-r', `${(reticleBase + 6).toFixed(1)}px`);
+        // The reticle hugs the star's own core light (the small bright disc drawStarCore actually paints,
+        // starRadiusPx * 0.09 clamped to [2.5, 48]), not the (much larger) hit circle around it — the hit
+        // area itself is untouched. A plain galaxy has no core light to hug, so it falls back to the hit
+        // circle's own edge, same as before.
+        if (entry.kind === 'star' || entry.kind === 'galaxy-star') {
+          const coreLightRadiusPx = Math.max(2.5, Math.min(48, starRadiusPx * 0.09));
+          el.style.setProperty('--reticle-r', `${Math.max(28, Math.min(72, coreLightRadiusPx + 8)).toFixed(1)}px`);
+        } else {
+          el.style.setProperty('--reticle-r', `${(r + 6).toFixed(1)}px`);
+        }
       }
     }
   }
@@ -476,6 +483,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
 
   function stopFlight(): void {
     if (flightRafRef.current !== null) { cancelAnimationFrame(flightRafRef.current); flightRafRef.current = null; }
+    // An interrupted flight (another fly/glide/pan starting mid-animation) must still resolve its promise —
+    // otherwise a caller awaiting it (search hand-off) would hang forever.
+    if (flightResolveRef.current) { const resolve = flightResolveRef.current; flightResolveRef.current = null; resolve(); }
   }
   function stopInertia(): void {
     if (inertiaRafRef.current !== null) { cancelAnimationFrame(inertiaRafRef.current); inertiaRafRef.current = null; }
@@ -648,13 +658,17 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     void fetchNearby();
   }
 
-  function flyTo(circle: Circle, categoryId: string | null, margin = 0.8): void {
+  /** Returns a promise that resolves once the camera has actually arrived — a caller that re-centres or
+   * focuses right after a fly (search hand-off does both) must await this, not just call it and move on:
+   * the flight runs over several animation frames, and reading cameraRef.current before it settles would
+   * capture a mid-flight scale, permanently losing the zoom-in (centreOn only pans, it never re-zooms). */
+  function flyTo(circle: Circle, categoryId: string | null, margin = 0.8): Promise<void> {
     lastFitRef.current = {circle, margin};
     touchedRef.current = false;
-    glideTo(fitCircle(viewportRef.current, circle, margin), categoryId);
+    return glideTo(fitCircle(viewportRef.current, circle, margin), categoryId);
   }
 
-  function glideTo(target: Camera, categoryId: string | null | undefined = null): void {
+  function glideTo(target: Camera, categoryId: string | null | undefined = null): Promise<void> {
     stopInertia();
     stopFlight();
     stopZoom();
@@ -662,19 +676,22 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       cameraRef.current = target;
       schedulePaint();
       afterFly(categoryId);
-      return;
+      return Promise.resolve();
     }
     const from = {...cameraRef.current};
     const duration = flightMs(from, target);
     const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      cameraRef.current = interpolate(from, target, t);
-      schedulePaint();
-      if (t < 1) { flightRafRef.current = requestAnimationFrame(tick); }
-      else { flightRafRef.current = null; afterFly(categoryId); }
-    };
-    flightRafRef.current = requestAnimationFrame(tick);
+    return new Promise<void>(resolve => {
+      flightResolveRef.current = resolve;
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        cameraRef.current = interpolate(from, target, t);
+        schedulePaint();
+        if (t < 1) { flightRafRef.current = requestAnimationFrame(tick); }
+        else { flightRafRef.current = null; flightResolveRef.current = null; afterFly(categoryId); resolve(); }
+      };
+      flightRafRef.current = requestAnimationFrame(tick);
+    });
   }
 
   /** Wheel zoom eases toward its target over a few frames instead of jumping per notch. */
@@ -885,28 +902,66 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   /** Choosing a suggestion (Enter or click) flies to the body and selects it, the same way the /search deep
    * link does — it never opens the reader. Enter again (now that the body is selected) or the usual double
    * tap opens it from there, same as any other planet or star. */
+  /** Hides the search pill completely after a suggestion (or a ?q= deep link) hands off to a selected body:
+   * closes the suggestion list, clears the typed query, blurs the input and drops the pill — unlike
+   * closeSearch(), it does not restore focus to wherever it came from, since focusSelectedBody() below is
+   * about to move focus to the body itself. */
+  function hideSearchAfterHandoff(): void {
+    if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
+    searchControllerRef.current?.abort();
+    suggestControllerRef.current?.abort();
+    suggestionsRef.current = [];
+    setSuggestionsBoth([]);
+    setHighlightIndex(-1);
+    clearHoverHideTimer();
+    hoveringSearchRef.current = false;
+    searchOpenRef.current = false;
+    setSearchOpen(false);
+    queryRef.current = '';
+    setQuery('');
+    searchPrevFocusRef.current = null;
+    searchInputRef.current?.blur();
+  }
+
+  /** Moves keyboard focus to a selected body's button once it exists in the DOM. The DOM only gains new
+   * buttons after commitDom's debounce, so a body picked from search may not be mounted yet: retry a few
+   * times rather than focus nothing (or the wrong element). */
+  function focusBody(key: string, attempts = 20): void {
+    const el = buttonElsRef.current.get(key);
+    if (el) { el.focus({preventScroll: true}); return; }
+    if (attempts <= 0 || !mountedRef.current) return;
+    setTimeout(() => focusBody(key, attempts - 1), DOM_DEBOUNCE_MS);
+  }
+
   async function openSearchResult(node: SpatialNode, categoryId: string): Promise<void> {
     if (node.target.kind !== 'version') return;
     const versionId = node.target.id;
     const entry = categoryId ? categoriesRef.current.get(categoryId) : undefined;
     if (!entry) { showNotFound(); return; }
     if (readerRef.current) closeReader(true);
-    flyTo(entry.star, categoryId);
-    await fetchItemsFor(categoryId);
+    // Await the flight itself, not just the item fetch: on a warm cache fetchItemsFor can resolve before the
+    // multi-frame flight animation does, and centreOn below only pans — reading the camera mid-flight would
+    // freeze it at a partial zoom and the item would never actually open.
+    await Promise.all([flyTo(entry.star, categoryId), fetchItemsFor(categoryId)]);
     if (!mountedRef.current) return;
     const items = itemCirclesRef.current.get(categoryId);
     const found = items ? [...items.values()].find(candidate => candidate.item.versionId === versionId) : undefined;
     if (found) {
-      select(itemKey(categoryId, found.item.id));
+      const key = itemKey(categoryId, found.item.id);
+      select(key);
       centreOn(found.circle);
       highlightItem(found.item.id);
+      hideSearchAfterHandoff();
+      focusBody(key);
       return;
     }
     const starDoc = starDocsRef.current.get(categoryId);
-    if (starDoc && starDoc.versionId === versionId) { select(categoryId); return; }
+    if (starDoc && starDoc.versionId === versionId) { select(categoryId); hideSearchAfterHandoff(); focusBody(categoryId); return; }
     // Neither a fetched planet nor the star's own document matched (a race with a slow fetch): the fly
     // already landed on the right star, so at least select it rather than opening anything.
     select(categoryId);
+    hideSearchAfterHandoff();
+    focusBody(categoryId);
   }
 
   function setSuggestionsBoth(list: SuggestRow[]): void {
@@ -918,9 +973,10 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     if (searchDebounceRef.current) { clearTimeout(searchDebounceRef.current); searchDebounceRef.current = null; }
     setSuggestionsBoth([]);
     setHighlightIndex(-1);
-    // The pill keeps what was typed — choosing a suggestion flies and selects, it does not reset the search.
+    // Choosing a suggestion flies to the body, selects it, and hands focus to it — openSearchResult hides
+    // the pill entirely (query cleared, list closed, input blurred) so the next Enter opens the reader
+    // instead of re-running the search.
     await openSearchResult(pick.node, pick.categoryId);
-    if (!alwaysVisibleRef.current) scheduleAutoHide();
   }
 
   /** The suggestion dropdown's search: reuses loadSpatialSearch (one call per debounce), resolving each
@@ -977,12 +1033,18 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       const entry = categoryId ? categoriesRef.current.get(categoryId) : undefined;
       if (!hit || !entry) { showNotFound(); return; }
       if (readerRef.current) closeReader(true);
-      flyTo(entry.star, categoryId);
-      await fetchItemsFor(categoryId, controller.signal);
+      // See openSearchResult: await the flight itself so centreOn below never freezes a mid-flight zoom.
+      await Promise.all([flyTo(entry.star, categoryId), fetchItemsFor(categoryId, controller.signal)]);
       if (!mountedRef.current) return;
       const items = itemCirclesRef.current.get(categoryId);
       const found = items ? [...items.values()].find(candidate => candidate.item.versionId === versionId) : undefined;
-      if (found) { select(itemKey(categoryId, found.item.id)); centreOn(found.circle); }
+      if (found) {
+        const key = itemKey(categoryId, found.item.id);
+        select(key);
+        centreOn(found.circle);
+        hideSearchAfterHandoff();
+        focusBody(key);
+      }
       highlightItem(hit.key);
     } catch { if (!controller.signal.aborted) showNotFound(); }
   }

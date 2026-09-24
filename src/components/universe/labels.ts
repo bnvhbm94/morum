@@ -30,6 +30,35 @@ export function resolveLabels(boxes: LabelBox[], pad = 6): Set<string> {
   return ids;
 }
 
+// Human-readable relation-predicate labels for the reader's satellites (B §2.1): a fixed Korean label for
+// every known core predicate and for the `x:scope:*` namespace the moderation skill uses for scope
+// judgements; any other `x:<namespace>:<name>` renders as `namespace · name`; an unrecognized core
+// predicate (no colon, not in the map) falls back to the raw string as-is.
+const RELATION_LABEL: Record<string, string> = {
+  supports: '뒷받침',
+  contradicts: '반박',
+  corrects: '정정',
+  depends_on: '전제',
+  defines: '정의',
+  same_meaning_as: '같은 뜻',
+  translation_of: '번역',
+  derived_from: '파생',
+  related_to: '관련',
+  'x:scope:broader': '범위 · 주장이 구절보다 넓음',
+  'x:scope:narrower': '범위 · 출처를 좁게 읽음',
+  'x:scope:shifted': '범위 · 같은 말, 다른 뜻',
+};
+
+export function relationLabel(predicate: string): string {
+  const known = RELATION_LABEL[predicate];
+  if (known) return known;
+  if (predicate.startsWith('x:')) {
+    const parts = predicate.split(':');
+    if (parts.length >= 3) return `${parts[1]} · ${parts.slice(2).join(':')}`;
+  }
+  return predicate;
+}
+
 /** A label's anchor relative to its dot: the four cardinal sides, then the four diagonals, tried in that order. */
 export type LabelAnchor = 'b' | 't' | 'r' | 'l' | 'br' | 'bl' | 'tr' | 'tl';
 export const LABEL_ANCHOR_ORDER: LabelAnchor[] = ['b', 't', 'r', 'l', 'br', 'bl', 'tr', 'tl'];

@@ -11,6 +11,9 @@ import {citeMark, renderCitedBody} from '../cited-body';
 import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
 import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES} from '../reading-spans';
 import {hueHex, parseAppearance} from './appearance';
+import {relationLabel} from './labels';
+
+export {relationLabel};
 
 export type ReaderTarget =
   | {kind: 'doc'; versionId: string; role: 'planet' | 'star'; categoryId: string; categoryLabel: string; planetCount: number}
@@ -19,9 +22,6 @@ export type ReaderTarget =
 export type ReaderNeighbor = {versionId: string; predicate: string};
 
 type Loaded = {view: VersionView; citations: Citation[]; meanings: Meaning[]; history: Version[]; neighbors: SpatialNeighbor[]; hasMoreNeighbors: boolean; dossier: Dossier | null};
-
-const RELATION_LABEL: Record<string, string> = {supports: '지지', corrects: '정정', depends_on: '의존', derived_from: '파생', contradicts: '반론', defines: '정의', related_to: '관련', same_meaning_as: '같은 의미', translation_of: '번역'};
-export function relationLabel(predicate: string): string { return RELATION_LABEL[predicate] || predicate; }
 
 export function readerTargetKey(target: ReaderTarget): string {
   return target.kind === 'doc' ? `doc:${target.versionId}` : `star:${target.categoryId}`;
