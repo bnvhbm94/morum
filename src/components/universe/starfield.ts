@@ -103,27 +103,61 @@ export function drawCategoryParticles(ctx: CanvasRenderingContext2D, points: Par
   ctx.globalAlpha = 1;
 }
 
-/** Very faint radial glow filling an 'open'/'items' circle, centre to rim. */
-export function drawCategoryGlow(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, radiusPx: number): void {
-  if (radiusPx <= 0) return;
-  const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radiusPx);
-  gradient.addColorStop(0, 'rgba(255,255,255,0.025)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gradient;
+// Item 5: a radial gradient per star per frame was one of the costs of panning. Each look is rendered once
+// into a small sprite per radius bucket (device pixels) and drawn scaled with drawImage; the gradient stops are
+// the same, with the overall alpha moved to globalAlpha, so the result reads identical to the eye.
+const SPRITE_BUCKETS = [4, 8, 16, 24, 32, 48, 64, 128];
+type SpriteKind = 'glow' | 'core';
+const spriteCache = new Map<string, CanvasImageSource>();
+
+function makeCanvas(size: number): (HTMLCanvasElement | OffscreenCanvas) | null {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(size, size);
+  if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = size; c.height = size; return c; }
+  return null;
+}
+
+function sprite(kind: SpriteKind, devicePx: number): CanvasImageSource | null {
+  const bucket = SPRITE_BUCKETS.find(b => b >= devicePx) ?? SPRITE_BUCKETS[SPRITE_BUCKETS.length - 1];
+  const key = `${kind}:${bucket}`;
+  const cached = spriteCache.get(key);
+  if (cached) return cached;
+  const canvas = makeCanvas(bucket * 2);
+  const ctx = canvas?.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null | undefined;
+  if (!canvas || !ctx) return null;
+  const g = ctx.createRadialGradient(bucket, bucket, 0, bucket, bucket, bucket);
+  if (kind === 'glow') {
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+  } else {
+    g.addColorStop(0, 'rgba(255,248,236,1)');
+    g.addColorStop(0.35, `rgba(255,240,220,${(0.35 / 0.95).toFixed(4)})`);
+    g.addColorStop(1, 'rgba(255,236,210,0)');
+  }
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(screenPos.x, screenPos.y, radiusPx, 0, Math.PI * 2);
+  ctx.arc(bucket, bucket, bucket, 0, Math.PI * 2);
   ctx.fill();
+  spriteCache.set(key, canvas);
+  return canvas;
+}
+
+function drawSprite(ctx: CanvasRenderingContext2D, kind: SpriteKind, screenPos: {x: number; y: number}, radius: number, alpha: number): void {
+  if (radius <= 0 || alpha <= 0) return;
+  const image = sprite(kind, radius * (ctx.getTransform().a || 1));
+  if (!image) return;
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(image, screenPos.x - radius, screenPos.y - radius, radius * 2, radius * 2);
+  ctx.globalAlpha = previous;
+}
+
+/** Very faint radial glow filling an 'open'/'items' circle, centre to rim (2.5% white at the centre). */
+export function drawCategoryGlow(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, radiusPx: number): void {
+  drawSprite(ctx, 'glow', screenPos, radiusPx, 0.025);
 }
 
 /** The light of a star: a warm core that stays small on screen so planets and the name read over it. */
 export function drawStarCore(ctx: CanvasRenderingContext2D, screenPos: {x: number; y: number}, starRadiusPx: number, alpha: number): void {
   const radius = Math.max(2.5, Math.min(48, starRadiusPx * 0.09));
-  const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radius);
-  gradient.addColorStop(0, `rgba(255,248,236,${(0.95 * alpha).toFixed(3)})`);
-  gradient.addColorStop(0.35, `rgba(255,240,220,${(0.35 * alpha).toFixed(3)})`);
-  gradient.addColorStop(1, 'rgba(255,236,210,0)');
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-  ctx.fill();
+  drawSprite(ctx, 'core', screenPos, radius, 0.95 * alpha);
 }

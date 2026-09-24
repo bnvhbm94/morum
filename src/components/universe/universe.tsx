@@ -14,7 +14,7 @@ import {worldToScreen, screenToWorld, zoomAt, panBy, fitCircle, interpolate, ine
 import {screenRadius, stageFor, stageScale, isVisible, pickFetchTargets, directionalNode, itemsOpen, STAGE_PX, type Stage, type FetchCandidate} from './lod';
 import {makeStarfield, paintStarfield, drawCategoryPoint, drawCategoryParticles, drawCategoryGlow, drawStarCore, makeCategoryParticles, type Star, type Particle} from './starfield';
 import {bodyKind, starCircle, CENTER_HOLE, type BodyKind} from './celestial';
-import {estimateLabelWidth, resolveLabels, placeDotLabels, resolveMotionLabels, EMPTY_LABEL_STATE, type LabelBox, type LabelAnchor, type LabelState} from './labels';
+import {estimateLabelWidth, resolveLabels, placeStableLabels, stableAnchorBox, labelZoomBucket, labelBucketScale, resolveMotionLabels, EMPTY_LABEL_STATE, type LabelBox, type LabelAnchor, type LabelState, type StableStarInput} from './labels';
 import UniverseReader, {readerTargetKey, relationLabel, type ReaderNeighbor, type ReaderTarget} from './reader';
 import {hueHex} from './appearance';
 import './universe.css';
@@ -222,6 +222,16 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const [suggestions, setSuggestions] = useState<SuggestRow[]>([]);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [reader, setReader] = useState<ReaderTarget | null>(null);
+  // Opening a document closes the desktop pill outright, so closing the reader comes back to the plain field.
+  useEffect(() => {
+    if (!reader) return;
+    clearHoverHideTimer();
+    hoveringSearchRef.current = false;
+    searchPrevFocusRef.current = null;
+    if (searchOpenRef.current) { searchOpenRef.current = false; setSearchOpen(false); }
+    setSuggestionsBoth([]);
+    setHighlightIndex(-1);
+  }, [reader]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Canvas and DOM placement -------------------------------------------------------------------------
 
@@ -229,9 +239,14 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const canvas = canvasRef.current;
     const viewport = viewportRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.round(viewport.width * dpr));
-    canvas.height = Math.max(1, Math.round(viewport.height * dpr));
+    // Item 7: while the camera moves, the backing store drops to 1 device pixel per CSS pixel (a quarter of
+    // the fill work on a 2x display); the real ratio comes back once the camera is still. CSS size is unchanged.
+    const dpr = movingRef.current ? 1 : window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(viewport.width * dpr));
+    const height = Math.max(1, Math.round(viewport.height * dpr));
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = width;
+    canvas.height = height;
     canvas.style.width = `${viewport.width}px`;
     canvas.style.height = `${viewport.height}px`;
     const ctx = canvas.getContext('2d');
@@ -389,10 +404,21 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const catNodes: {id: string; radiusPx: number}[] = [];
     const itemNodes: {key: string; radiusPx: number}[] = [];
     const boxes: LabelBox[] = [];
-    // Planet titles are placed after every star's name is known (so a title never loses to a star name
-    // that happened to be drawn later), each against its own star's dots. `centerDist` (4-9/1-2) lets stars
-    // closer to the screen centre claim their planets' label spots first, against one shared occupancy grid.
-    const pendingStars: {centerDist: number; dots: {itemId: string; x: number; y: number}[]; labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[]}[] = [];
+    // Planet titles are placed after every star's name is known, against their own star's dots, in a
+    // pan-invariant frame at a quantised zoom (labels.ts placeStableLabels), so panning never moves a title.
+    const bucketScale = labelBucketScale(labelZoomBucket(camera.scale));
+    const stableStars: StableStarInput[] = [];
+    const stableBlockers: LabelBox[] = [];
+    const screenLabels = new Map<string, {x: number; y: number; width: number; height: number}>();
+    // Under-cluster names belong to the far view only: once any body in view is at the open or items stage
+    // (the visitor is inside a star), neighbouring nebula-stage stars keep their names until they open themselves.
+    let insideStar = false;
+    for (const entry of categoriesRef.current.values()) {
+      if (!isVisible(entry.circle, camera, viewport)) continue;
+      const stage = stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, k);
+      if (stage === 'open' || stage === 'items') { insideStar = true; break; }
+    }
+    rootElRef.current?.setAttribute('data-inside-star', insideStar ? 'true' : 'false');
     for (const [id, entry] of categoriesRef.current) {
       if (!isVisible(entry.circle, camera, viewport)) continue;
       const radiusPx = screenRadius(entry.circle, camera);
@@ -420,7 +446,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         // The name at the centre takes its place before any planet label.
         // Far away the name hangs under the cluster and competes with its neighbours like any map label.
         const far = stage === 'nebula';
-        if (!far || selectedKeyRef.current === id || radiusPx >= NAME_FAR_MIN_PX * k) {
+        if (!far || (!insideStar && (selectedKeyRef.current === id || radiusPx >= NAME_FAR_MIN_PX * k))) {
           const nameFont = nameFontPx(starRadiusPx);
           const namePos = worldToScreen(camera, viewport, entry.star);
           const nameY = namePos.y + nameOffsetPx(stage, radiusPx, nameFont);
@@ -436,63 +462,70 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         if (!items) continue;
         const font = labelFontPx(starRadiusPx);
         const lineHeight = Math.round(font * 1.35);
-        // Every drawn dot is an obstacle: a title never lands on another planet.
-        const dots: {itemId: string; x: number; y: number}[] = [];
+        const maxWidth = labelMaxPx(starRadiusPx, viewport.width);
+        // The same sizes at the bucket's scale, for the pan-invariant layout.
+        const bucketStarPx = entry.star.r * bucketScale;
+        const bucketFont = labelFontPx(bucketStarPx);
+        const bucketLine = Math.round(bucketFont * 1.35);
+        const bucketMax = labelMaxPx(bucketStarPx, viewport.width);
+        // The open star's centred name is the first thing its planets' titles must avoid.
+        const bucketNameFont = nameFontPx(bucketStarPx);
+        stableBlockers.push({id: `name:${id}`, x: entry.star.x * bucketScale, y: entry.star.y * bucketScale,
+          width: Math.min(estimateLabelWidth(entry.category.label, bucketNameFont), bucketStarPx * 0.68), height: bucketNameFont * 1.3, priority: 2e6});
+        // Every planet of the star takes part (not only those on screen), so panning never changes the set.
+        const dots: StableStarInput['dots'] = [];
+        const labels: StableStarInput['labels'] = [];
+        // Labels are frozen while the camera moves (resolveMotionLabels), so their inputs are only built when still.
+        const buildLabels = !movingRef.current;
         for (const [itemId, entryItem] of items) {
-          if (!isVisible(entryItem.circle, camera, viewport)) continue;
-          const p = worldToScreen(camera, viewport, entryItem.circle);
-          dots.push({itemId, x: p.x, y: p.y});
-        }
-        const labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[] = [];
-        for (const [itemId, entryItem] of items) {
-          if (!isVisible(entryItem.circle, camera, viewport)) continue;
           const key = itemKey(id, itemId);
-          const r = screenRadius(entryItem.circle, camera);
-          itemNodes.push({key, radiusPx: r});
-          const pos = worldToScreen(camera, viewport, entryItem.circle);
+          if (!buildLabels) {
+            if (isVisible(entryItem.circle, camera, viewport)) itemNodes.push({key, radiusPx: screenRadius(entryItem.circle, camera)});
+            continue;
+          }
+          dots.push({id: itemId, x: entryItem.circle.x, y: entryItem.circle.y});
           const label = itemLabel(entryItem.item);
           const selected = selectedKeyRef.current === key;
           const lit = highlightRef.current?.itemId === itemId;
-          const priority = (selected ? 1e6 : 0) + (lit ? 1e5 : 0) + (entryItem.item.node.untitled ? 0 : 10) + Math.min(r, 9);
+          const priority = (selected ? 1e6 : 0) + (lit ? 1e5 : 0) + (entryItem.item.node.untitled ? 0 : 10) + Math.min(entryItem.circle.r * bucketScale, 9);
           // A long title wraps onto a second line rather than being cut; its box grows to match.
-          const maxWidth = labelMaxPx(starRadiusPx, viewport.width);
+          const bucketFull = estimateLabelWidth(label, bucketFont);
+          labels.push({id: key, dotId: itemId, x: entryItem.circle.x, y: entryItem.circle.y,
+            width: Math.min(bucketFull, bucketMax), height: bucketLine * (bucketFull > bucketMax ? 2 : 1), priority});
+          if (!isVisible(entryItem.circle, camera, viewport)) continue;
+          itemNodes.push({key, radiusPx: screenRadius(entryItem.circle, camera)});
+          const pos = worldToScreen(camera, viewport, entryItem.circle);
           const fullWidth = estimateLabelWidth(label, font);
-          const lines = fullWidth > maxWidth ? 2 : 1;
-          const width = Math.min(fullWidth, maxWidth);
-          const height = lineHeight * lines;
-          labels.push({id: key, itemId, x: pos.x, y: pos.y, width, height, priority, entryItem});
+          screenLabels.set(key, {x: pos.x, y: pos.y, width: Math.min(fullWidth, maxWidth), height: lineHeight * (fullWidth > maxWidth ? 2 : 1)});
         }
-        const centerDist = Math.hypot(screenPos.x - viewport.width / 2, screenPos.y - viewport.height / 2);
-        pendingStars.push({centerDist, dots, labels});
+        // Bigger stars claim spots first; the order never depends on where the camera is.
+        stableStars.push({id, order: entry.star.r, dots, labels});
       }
     }
     // A1: while the camera is moving, freeze the last computed label anchors/visibility instead of
     // recomputing them (and the DOM stage/tier sets below) every frame — only the camera transform moves.
-    const {state: labelState, changed} = resolveMotionLabels(movingRef.current, labelStateRef.current, () => {
-      // Planet titles: up to 8 fixed anchors around the dot (below, right, above, left, then the diagonals)
-      // before a label gives up — a star's own name (already in `boxes`) still always wins the spot it sits
-      // on. 1-2/4-9: one shared occupancy grid across every star, closest-to-centre star claiming spots
-      // first, so neighbouring stars' labels never overlap each other.
+    const prevLabelState = labelStateRef.current;
+    const {state: labelState} = resolveMotionLabels(movingRef.current, prevLabelState, () => {
       const resolved = resolveLabels(boxes, LABEL_PAD_PX);
-      const anchors = new Map<string, LabelAnchor>();
-      const occupied: LabelBox[] = [...boxes];
-      const ordered = [...pendingStars].sort((a, b) => a.centerDist - b.centerDist);
-      for (const star of ordered) {
-        const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
-          !star.dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
-        const allowed = (id: string, x: number, y: number, width: number, height: number): boolean =>
-          selectedKeyRef.current === id || (insideViewport(x, y, width, height, viewport, chromeHeightRef.current) && clearOfDots(id.includes('::') ? splitItemKey(id)[1] : id, x, y, width, height));
-        const placed = placeDotLabels(star.labels, {axisGap: DOT_PX + LABEL_AXIS_GAP_PX, diagGap: DOT_PX + LABEL_DIAG_GAP_PX, pad: LABEL_PAD_PX, blockers: occupied, allowed});
-        for (const label of star.labels) {
-          const at = placed.get(label.id);
-          if (!at) continue;
-          resolved.add(label.id);
-          anchors.set(label.id, at.anchor);
-          occupied.push({id: label.id, x: at.x, y: at.y, width: at.width, height: at.height, priority: label.priority});
-        }
+      // Item 8: sticky anchors, chosen per zoom bucket in a pan-invariant frame. Every placed title keeps its
+      // anchor in the state (on screen or not) so it sticks when it comes back into view.
+      const anchors = placeStableLabels(stableStars, bucketScale, {
+        axisGap: DOT_PX + LABEL_AXIS_GAP_PX, diagGap: DOT_PX + LABEL_DIAG_GAP_PX, pad: LABEL_PAD_PX, dotPx: DOT_PX,
+        blockers: stableBlockers, prev: prevLabelState.anchors, always: key => selectedKeyRef.current === key,
+      });
+      // Being off screen or under the bottom chrome only hides a title; it never moves one.
+      for (const [key, anchor] of anchors) {
+        const at = screenLabels.get(key);
+        if (!at) continue;
+        const box = stableAnchorBox(at, anchor, 1, DOT_PX + LABEL_AXIS_GAP_PX, DOT_PX + LABEL_DIAG_GAP_PX);
+        if (selectedKeyRef.current === key || insideViewport(box.x, box.y, box.width, box.height, viewport, chromeHeightRef.current)) resolved.add(key);
       }
       return {visible: resolved, anchors};
     });
+    // Only a title that appears fades in; one whose anchor changed slides there (universe.css), and one that
+    // disappears fades out through its own opacity transition.
+    const changed = new Set<string>();
+    if (labelState !== prevLabelState) for (const key of labelState.visible) if (!prevLabelState.visible.has(key)) changed.add(key);
     labelStateRef.current = labelState;
     labelChangedRef.current = changed;
     if (changed.size > 0) {
@@ -502,6 +535,17 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     }
     labelAnchorsRef.current = labelState.anchors;
     labelsRef.current = labelState.visible;
+
+    // Item 6: while reading, blur the finished frame once, in the bitmap itself (the field is still behind
+    // the text, so this runs only on the rare repaint), instead of a CSS filter recomposited every frame.
+    if (reading) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.filter = `blur(${(2 * (canvas.width / Math.max(1, viewport.width))).toFixed(1)}px)`;
+      ctx.globalCompositeOperation = 'copy';
+      ctx.drawImage(canvas, 0, 0);
+      ctx.restore();
+    }
 
     positionDomButtons(camera, viewport);
     if (!movingRef.current) {
@@ -629,6 +673,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     if (movingRef.current === value) return;
     movingRef.current = value;
     rootElRef.current?.setAttribute('data-moving', value ? 'true' : 'false');
+    if ((window.devicePixelRatio || 1) > 1) { resizeCanvas(); schedulePaint(); }
     if (!value) schedulePaint(); // one recompute now that the camera is still again
   }
 
@@ -1242,8 +1287,10 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
       const inField = target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
-      if (event.key === '/' && !inField) { event.preventDefault(); openSearch(); return; }
-      if (!inField && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
+      // No search while a document is open: `/` and Cmd/Ctrl+K do nothing until the reader closes. `/` is still
+      // claimed (preventDefault) so the site shell's own search dialog does not open over the reader either.
+      if (event.key === '/' && !inField) { event.preventDefault(); if (!readerRef.current) openSearch(); return; }
+      if (!inField && !readerRef.current && !event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); return; }
       if (inField || event.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); if (readerRef.current) closeReader(true); else flyToParentOrRoot(); return; }
       if (readerRef.current) {
@@ -1460,9 +1507,8 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   }
 
   // Touch/narrow: docked pill, hidden only while idle-and-unfocused (unchanged). Desktop: hidden until the pointer
-  // reaches the top edge or the pill is opened explicitly, and unlike the docked pill it stays open over the
-  // reader rather than disappearing with the rest of the chrome.
-  const dockHidden = alwaysVisible ? (pillHidden && !inputFocused) || reader !== null : !searchOpen;
+  // reaches the bottom edge or the pill is opened explicitly. Never rendered while a document is open.
+  const dockHidden = alwaysVisible ? pillHidden && !inputFocused : !searchOpen;
   const suggestListId = 'universe-suggestions';
 
   function renderSuggestions() {
@@ -1483,11 +1529,11 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     );
   }
 
-  function renderSearchPill(position: 'top' | 'bottom') {
+  function renderSearchPill() {
     return (
-      <div className={`universe-search universe-search--${position}`} data-hidden={dockHidden}
-        onMouseEnter={position === 'top' ? revealSearch : undefined}
-        onMouseLeave={position === 'top' ? onSearchHoverLeave : undefined}>
+      <div className="universe-search" data-hidden={dockHidden}
+        onMouseEnter={alwaysVisible ? undefined : revealSearch}
+        onMouseLeave={alwaysVisible ? undefined : onSearchHoverLeave}>
         <label className="universe-sr-only" htmlFor="universe-query">우주 검색</label>
         <input id="universe-query" ref={searchInputRef} value={query} autoComplete="off" placeholder="검색"
           role="combobox" aria-expanded={suggestions.length > 0} aria-controls={suggestListId} aria-autocomplete="list"
@@ -1541,7 +1587,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   }
 
   return (
-    <div ref={rootElRef} className="universe-root" data-reading={reader !== null} data-search-open={searchOpen} data-moving="false">
+    <div ref={rootElRef} className="universe-root" data-reading={reader !== null} data-moving="false">
       <canvas ref={canvasRef} className="universe-canvas" aria-hidden="true" />
       <div ref={containerRef} className="universe-viewport" tabIndex={-1} aria-hidden={reader !== null}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
@@ -1554,21 +1600,17 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         <UniverseReader target={reader} reducedMotion={reducedMotionRef.current}
           onClose={() => closeReader(true)} onOpenVersion={openVersionFromReader} onNeighbors={onNeighbors} />
       )}
-      {/* Desktop only: a 48px hover strip across the top edge reveals the pill without focusing it. Not while
-          reading: it used to sit over the reader's crumb and block the close button; open the pill there only
-          on purpose (/, Cmd/Ctrl+K), and universe.css pushes the crumb down to clear it when it is shown. */}
+      {/* Desktop only: a 48px hover strip along the bottom edge reveals the pill without focusing it. No search
+          at all while a document is open: no strip, no pill, no shortcut. */}
       {!alwaysVisible && !reader && (
         <div className="universe-hover-zone" aria-hidden="true" onMouseEnter={revealSearch} onMouseLeave={onSearchHoverLeave} />
-      )}
-      {!alwaysVisible && (
-        <div className="universe-search-top">{renderSearchPill('top')}</div>
       )}
       <div ref={chromeRef} className="universe-chrome">
         {/* Desktop: no visible hint or caption line (owner decision); the caption stays for screen readers only. */}
         <p className={`universe-crumb${alwaysVisible ? '' : ' universe-sr-only'}`} aria-live="polite" data-hidden={alwaysVisible ? reader !== null : false}>
           {notFound ? '찾지 못했다' : crumbText}
         </p>
-        {alwaysVisible && renderSearchPill('bottom')}
+        {!reader && renderSearchPill()}
       </div>
     </div>
   );

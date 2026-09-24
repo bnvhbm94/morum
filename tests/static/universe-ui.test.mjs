@@ -46,7 +46,8 @@ test('universe.css draws nodes without borders, connecting lines or wide dark sc
   for (const declaration of declarations) {
     assert.match(declaration, /^border:\s*0;$/, `unexpected border declaration: ${declaration}`);
   }
-  assert.doesNotMatch(styles, /\bstroke\b/);
+  // The only stroke allowed is the label halo's text outline (item 4: replaces a 10-layer text-shadow).
+  assert.doesNotMatch(styles.replace(/-webkit-text-stroke:\s*2px #0c0910;/g, '').replace(/paint-order:\s*stroke fill;/g, ''), /\bstroke\b/);
   assert.doesNotMatch(styles, /linear-gradient|radial-gradient/);
   assert.doesNotMatch(source, /ctx\.(lineTo|stroke)\(/);
 });

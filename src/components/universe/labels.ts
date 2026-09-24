@@ -136,3 +136,99 @@ export function resolveMotionLabels(moving: boolean, prev: LabelState, computeNe
   const next = computeNext();
   return {state: next, changed: diffLabelState(prev, next)};
 }
+
+// ---- Stable placement (item 8): anchors are chosen in a pan-invariant frame at a quantised zoom, and stick.
+//
+// The layout frame is world coordinates times the zoom bucket's scale, so panning (a pure translation) never
+// changes any input, and zooming inside one bucket never does either. Only crossing a bucket or a change in
+// the set of bodies passed in can move a label, and even then a label keeps its previous anchor while that
+// spot is still free: existing labels are placed first, then new or displaced ones take a free anchor or hide.
+
+/** Zoom buckets are this ratio apart: anchors are only reconsidered when the scale crosses one. */
+export const LABEL_ZOOM_BUCKET_RATIO = 1.25;
+
+export function labelZoomBucket(scale: number, ratio = LABEL_ZOOM_BUCKET_RATIO): number {
+  return Math.floor(Math.log(Math.max(scale, 1e-12)) / Math.log(ratio) + 1e-9);
+}
+
+/** The representative scale of a bucket (its lower edge), used to lay labels out for the whole bucket. */
+export function labelBucketScale(bucket: number, ratio = LABEL_ZOOM_BUCKET_RATIO): number {
+  return Math.pow(ratio, bucket);
+}
+
+/** A star's planets for stable placement. Dot and label positions are in world units; label sizes are in
+ * layout pixels (already computed for the bucket scale). */
+export type StableStarInput = {
+  id: string;
+  /** Stars with a higher order claim spots first; must not depend on the camera position. */
+  order: number;
+  dots: {id: string; x: number; y: number}[];
+  labels: {id: string; dotId: string; x: number; y: number; width: number; height: number; priority: number}[];
+};
+
+export type StablePlacementOptions = {
+  axisGap?: number; diagGap?: number; pad?: number;
+  /** Half-size of the drawn dot, in layout pixels; a title never covers another planet's dot. */
+  dotPx?: number;
+  /** Boxes already taken in the layout frame (a star's own centred name). */
+  blockers?: LabelBox[];
+  /** Previous anchors (sticky): kept while still free. */
+  prev?: Map<string, LabelAnchor>;
+  /** A label for which this returns true (the selection) may cover dots. */
+  always?: (id: string) => boolean;
+};
+
+/** Box of a label at a given anchor in the layout frame. Exported for tests. */
+export function stableAnchorBox(label: {x: number; y: number; width: number; height: number}, anchor: LabelAnchor, scale: number, axisGap = 10, diagGap = 9): {x: number; y: number; width: number; height: number} {
+  const c = anchorCenter(label.x * scale, label.y * scale, anchor, label.width, label.height, axisGap, diagGap);
+  return {x: c.x, y: c.y, width: label.width, height: label.height};
+}
+
+/**
+ * Chooses an anchor for each label, stably (see above). `scale` should be labelBucketScale(bucket), never the
+ * live camera scale. Returns the anchors of the labels that found a spot; the others hide.
+ */
+export function placeStableLabels(stars: StableStarInput[], scale: number, opts: StablePlacementOptions = {}): Map<string, LabelAnchor> {
+  const {axisGap = 10, diagGap = 9, pad = 6, dotPx = 3, blockers = [], prev, always} = opts;
+  type Entry = {star: StableStarInput; label: StableStarInput['labels'][number]};
+  const entries: Entry[] = [];
+  const orderedStars = [...stars].sort((a, b) => b.order - a.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const star of orderedStars) {
+    const labels = [...star.labels].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    for (const label of labels) entries.push({star, label});
+  }
+  const occupied: LabelBox[] = [...blockers];
+  const result = new Map<string, LabelAnchor>();
+  const fits = (entry: Entry, anchor: LabelAnchor): LabelBox | null => {
+    const b = stableAnchorBox(entry.label, anchor, scale, axisGap, diagGap);
+    const box: LabelBox = {id: entry.label.id, ...b, priority: entry.label.priority};
+    if (!(always && always(entry.label.id))) {
+      for (const d of entry.star.dots) {
+        if (d.id === entry.label.dotId) continue;
+        if (Math.abs(d.x * scale - box.x) * 2 < box.width + dotPx * 2 + 6 && Math.abs(d.y * scale - box.y) * 2 < box.height + dotPx * 2 + 6) return null;
+      }
+    }
+    if (occupied.some(other => overlaps(box, other, pad))) return null;
+    return box;
+  };
+  // Pass 1: every label that already had an anchor keeps it if that spot is still free.
+  const rest: Entry[] = [];
+  for (const entry of entries) {
+    const before = prev?.get(entry.label.id);
+    const box = before ? fits(entry, before) : null;
+    if (before && box) { occupied.push(box); result.set(entry.label.id, before); } else rest.push(entry);
+  }
+  // Pass 2: new labels and those whose spot is now taken try the anchors in order, or hide. A selected label
+  // goes first so it is never crowded out by a newcomer.
+  rest.sort((a, b) => Number(Boolean(always?.(b.label.id))) - Number(Boolean(always?.(a.label.id))));
+  for (const entry of rest) {
+    for (const anchor of LABEL_ANCHOR_ORDER) {
+      const box = fits(entry, anchor);
+      if (!box) continue;
+      occupied.push(box);
+      result.set(entry.label.id, anchor);
+      break;
+    }
+  }
+  return result;
+}

@@ -62,7 +62,7 @@ export default function ReadingShell({children}: {children: ReactNode}) {
       if (dialog || event.defaultPrevented || event.isComposing || event.repeat ||
           event.ctrlKey || event.metaKey || event.altKey ||
           target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog')) return;
-      if (event.key === '/' && pathname !== '/universe') {
+      if (event.key === '/' && !immersive) {
         event.preventDefault();
         open('search', document.activeElement instanceof HTMLElement ? document.activeElement : null);
       }
