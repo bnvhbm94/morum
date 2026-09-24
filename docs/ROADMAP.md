@@ -53,7 +53,7 @@
 | 1.6 | OpenAPI 3.1 + api-catalog | 등록표에서 `public/openapi.json` 생성(`api-routes.json`과 같은 스크립트), 정적 테스트로 일치 검사, `/.well-known/api-catalog`(RFC 9727 linkset) 추가, `llms.txt`와 API 루트에서 링크 | 1.5 뒤 Sonnet 1명 | 없음 |
 | 1.7 | `mutate` 분해 + plpgsql_check | `knowledge.mutate`를 영수증 공통부 + 연산별 `create_*_core`로; `plpgsql_check` 확장으로 CI에서 함수 정적 검사; 마이그레이션 0111 + 롤백; DB 통과 | Sonnet 1명(SQL), 로컬 DB | push(소유자) |
 | 1.8 ✅ | 문서 언어 | 코드 문서(`DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`)는 영어 원본; 구상 문서(INTENT, CONTENT_STRATEGY, ROADMAP)는 한국어 원본 + 같은 구조의 영어 번역 파일, 파일 머리에 상호 링크 | Sonnet 1명 | 없음 |
-| 1.9 | 사이트 디테일(데이터 무관) | 첫 화면에 당위성 한 단락(첫 상호작용 후 사라짐), 읽기 모드에 근거별 `quote_check` 상태와 검토 계열 수, 구형 explorer·객체 페이지 정리, 폰 폭 간격; 행성 꾸미기 `attributes.appearance`(제한 팔레트의 색조·질감; 밝기·고리·흐림은 장부의 뜻으로 예약) | 설계: Opus 급에 설계 요청(팔레트·표시 규칙·문장 위치) → 소유자 선택 → 구현: Sonnet 1명 | 없음 |
+| 1.9 ✅ | 사이트 디테일(데이터 무관) | 첫 화면에 당위성 한 단락(첫 상호작용 후 사라짐), 읽기 모드에 근거별 `quote_check` 상태와 검토 계열 수, 구형 explorer·객체 페이지 정리, 폰 폭 간격; 행성 꾸미기 `attributes.appearance`(제한 팔레트의 색조·질감; 밝기·고리·흐림은 장부의 뜻으로 예약) | 설계: Opus 급에 설계 요청(팔레트·표시 규칙·문장 위치) → 소유자 선택 → 구현: Sonnet 1명 | 없음 |
 | 1.10 ✅ | 공개 전 보안 점검 | 모든 `knowledge` 테이블에 RLS 활성 + anon/authenticated 권한 없음을 DB 테스트로 고정; 브라우저 번들에 Supabase 키가 없음을 정적 테스트로 고정; 익명 쓰기 경로의 요청 한도 확인 | Sonnet 1명 | 없음 |
 
 의존: 1.5 → 1.6. 1.7 독립. 1주 끝의 지표: 외부인이 README → CONTRIBUTING → `npm ci && npm run test:functional`까지 15분.
@@ -218,3 +218,4 @@
 - 2026-09-24 (오후): 마이그레이션 0112·0113 운영 push(소유자), 배포 morum-ppjklsnt3. 운영 확인: `/locate` unique 응답, dossier의 `claim_reviews`·`agreements.reviews`, `/.well-known/api-catalog`(linkset+json), capabilities Link 헤더.
 - 2026-09-24 (오후 2): D1 Apache-2.0+DCO, D2 CC0+AI 학습 허용, D3 개인 계정 공개 저장소로 결정. 라이선스 파일 커밋, https://github.com/bnvhbm94/morum 공개 push(1.1 완료). 1.9는 소유자 결정(첫 화면 문장 없음, 거리에 뜻이 있는 배치, 데스크톱 검색 단축키) 반영한 지시서로 구현 중.
 - 2026-09-24 (저녁): 외부 AI 비평 반영. README에 "보증하지 않는 것"(신원 미검증·원문 미확보·순환 인용은 구조의 한계), "가치의 두 단계"(개인 장부 → 공유 장부, 증거는 교차 계열 재사용만), "실험 하나"(사람이 확인한 정답 발췌 기준, 시딩/비시딩, 원문 직접 열기 대조군), "검증되지 않은 가설"(의미 참조는 장기 가설로 내림) 추가. skill.md에서 의미 참조 비중 축소. 3.2 실험 재설계, 2.10 순환 인용 감지 추가.
+- 2026-09-24 (밤): 1.9 완료(6단계, 커밋 7a58355~2b071ab, 배포 morum-qi8m4dbdx): 뜻 있는 행성 배치, Morum 항성 첫 시점, 데스크톱 검색 단축키, 읽기 화면 인용 대조·검토 표, `/`가 우주·구형 페이지 리다이렉트·삭제, 폰 간격, `attributes.appearance` 팔레트. 1주 항목 전부 완료(1.6 OpenAPI·1.7만 남음).
