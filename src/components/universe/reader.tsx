@@ -47,6 +47,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
   const leftAsideRef = useRef<HTMLElement>(null);
   const rightAsideRef = useRef<HTMLElement>(null);
   const cursorRef = useRef<ReaderCursor>(INITIAL_READER_CURSOR);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const lastIndexRef = useRef<{left: number | null; right: number | null}>({left: null, right: null});
   const paragraphRef = useRef(-1);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
@@ -57,6 +59,8 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
   useEffect(() => {
     clearReadingHighlight();
     cursorRef.current = INITIAL_READER_CURSOR;
+    lastIndexRef.current = {left: null, right: null};
+    panStage(stageRef.current, null, null, false);
     paragraphRef.current = -1;
     setLoaded(null); setError('');
     if (target.kind !== 'doc') { setLoading(false); onNeighbors([]); return; }
@@ -121,22 +125,25 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
         }
         const leftEls = satellitesIn(leftAsideRef.current), rightEls = satellitesIn(rightAsideRef.current);
         const counts = {left: leftEls.length, right: rightEls.length};
-        const enterIndex = cursor.column === 'center' ? nearestIndex(arrow === 'ArrowLeft' ? leftEls : rightEls, scroller) : 0;
+        const enterSide = arrow === 'ArrowLeft' ? 'left' : 'right';
+        const remembered = lastIndexRef.current[enterSide];
+        const enterIndex = cursor.column === 'center' ? (remembered ?? 0) : 0;
         const next = moveReaderCursor(cursor, arrow, counts, enterIndex);
         cursorRef.current = next;
+        if (next.column !== 'center') lastIndexRef.current[next.column] = next.index;
         // The cursor moves the view, not just a highlight: the current item is brought to the middle of the
         // reader and the rest of its column steps back (CSS on aria-current), so the eye follows the move.
         if (next.column === 'center') {
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           article.focus({preventScroll: true});
-          glideScroll(scroller, article, 'nearest', smooth);
+          panStage(stageRef.current, scroller, null, smooth);
         } else {
           const els = next.column === 'left' ? leftEls : rightEls;
           const el = els[next.index];
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           el?.setAttribute('aria-current', 'true');
           el?.focus({preventScroll: true});
-          if (el) glideScroll(scroller, el, 'center', smooth);
+          if (el) panStage(stageRef.current, scroller, el, smooth);
         }
         return;
       }
@@ -173,18 +180,20 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           if (!side) return;
           const index = satellitesIn(side === 'left' ? leftAsideRef.current : rightAsideRef.current).indexOf(sat);
           cursorRef.current = {column: side, index: Math.max(0, index)};
+          lastIndexRef.current[side] = Math.max(0, index);
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           sat.setAttribute('aria-current', 'true'); sat.focus({preventScroll: true});
-          glideScroll(scroller, sat, 'center', !reducedMotion);
+          panStage(stageRef.current, scroller, sat, !reducedMotion);
           return;
         }
         if (articleRef.current && articleRef.current.contains(target) && cursorRef.current.column !== 'center') {
           cursorRef.current = INITIAL_READER_CURSOR;
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
+          panStage(stageRef.current, scroller, null, !reducedMotion);
         }
       }}
       onClick={event => { if (event.target === event.currentTarget || (event.target instanceof HTMLElement && event.target.classList.contains('universe-reader-stage'))) onClose(); }}>
-      <div className="universe-reader-stage">
+      <div className="universe-reader-stage" ref={stageRef}>
         <p className="universe-reader-crumb">
           <button type="button" className="universe-reader-close" onClick={onClose}>닫기</button>
           <span>{crumb}</span>
@@ -247,50 +256,38 @@ function satellite(key: string, kind: string, caption: string, body: ReactNode, 
 
 
 // ---- View movement (mirrors the field's glide: easeInOutCubic, 420-900ms by distance) --------------------
+// The reader behaves like the field's camera: moving the cursor pans the whole stage so the current item sits
+// at the centre of the view, on both axes, without touching the article's own scroll position. Returning to
+// the article pans back to the resting position.
 function easeInOutCubic(t: number): number { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-let glideRaf: number | null = null;
-/** Scroll the reader so `el` sits at the middle (or just inside the view for 'nearest'), animated like a camera flight. */
-function glideScroll(scroller: HTMLElement, el: HTMLElement, block: 'center' | 'nearest', smooth: boolean): void {
-  const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect();
-  const elTop = er.top - sr.top + scroller.scrollTop;
-  let target: number;
-  if (block === 'center') target = elTop - (sr.height - er.height) / 2;
-  else if (er.top < sr.top) target = elTop - 24;
-  else if (er.bottom > sr.bottom) target = elTop + er.height - sr.height + 24;
-  else return;
-  const max = scroller.scrollHeight - scroller.clientHeight;
-  target = Math.max(0, Math.min(max, target));
-  const from = scroller.scrollTop, delta = target - from;
-  if (glideRaf !== null) { cancelAnimationFrame(glideRaf); glideRaf = null; }
-  if (!smooth || Math.abs(delta) < 2) { scroller.scrollTop = target; return; }
-  const duration = Math.max(420, Math.min(900, 420 + Math.abs(delta) / 4));
+let panRaf: number | null = null;
+let panNow = {x: 0, y: 0};
+function panStage(stage: HTMLElement | null, scroller: HTMLElement | null, el: HTMLElement | null, smooth: boolean): void {
+  if (!stage) return;
+  let target = {x: 0, y: 0};
+  if (el && scroller) {
+    const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect();
+    // er already includes the current pan; remove it to get the resting position, then aim at the centre.
+    const restCx = (er.left + er.right) / 2 - panNow.x, restCy = (er.top + er.bottom) / 2 - panNow.y;
+    target = {x: sr.left + sr.width / 2 - restCx, y: sr.top + sr.height / 2 - restCy};
+  }
+  if (panRaf !== null) { cancelAnimationFrame(panRaf); panRaf = null; }
+  const from = {...panNow};
+  const dist = Math.hypot(target.x - from.x, target.y - from.y);
+  const apply = (x: number, y: number) => { panNow = {x, y}; stage.style.transform = x === 0 && y === 0 ? '' : `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; };
+  if (!smooth || dist < 2) { apply(target.x, target.y); return; }
+  const duration = Math.max(420, Math.min(900, 420 + dist / 4));
   const start = performance.now();
   const tick = (now: number) => {
-    const t = Math.min(1, (now - start) / duration);
-    scroller.scrollTop = from + delta * easeInOutCubic(t);
-    glideRaf = t < 1 ? requestAnimationFrame(tick) : null;
+    const t = Math.min(1, (now - start) / duration), e = easeInOutCubic(t);
+    apply(from.x + (target.x - from.x) * e, from.y + (target.y - from.y) * e);
+    panRaf = t < 1 ? requestAnimationFrame(tick) : null;
   };
-  glideRaf = requestAnimationFrame(tick);
+  panRaf = requestAnimationFrame(tick);
 }
 
 function satellitesIn(aside: HTMLElement | null): HTMLElement[] {
   return aside ? Array.from(aside.querySelectorAll<HTMLElement>('.universe-satellite')) : [];
-}
-
-/** Which satellite to land on when the cursor enters a side column from the centre: the one nearest, top to
- * bottom, to the scroller's current vertical middle — not always the first, so the cursor picks up roughly
- * where the visitor was already reading rather than jumping to the top of a long column. */
-function nearestIndex(elements: HTMLElement[], scroller: HTMLElement): number {
-  if (!elements.length) return 0;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const mid = scrollerRect.top + scrollerRect.height / 2;
-  let best = 0, bestDist = Infinity;
-  elements.forEach((el, index) => {
-    const rect = el.getBoundingClientRect();
-    const dist = Math.abs((rect.top + rect.bottom) / 2 - mid);
-    if (dist < bestDist) { bestDist = dist; best = index; }
-  });
-  return best;
 }
 
 function clearSatelliteCurrent(aside: HTMLElement | null): void {
