@@ -10,7 +10,7 @@ import type {ContentRef, Dossier, QuoteCheckState, Version, VersionView} from '.
 import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatialMeanings, loadSpatialNeighbors, loadSpatialVersion, type Citation, type Meaning, type SpatialNeighbor} from '../../lib/spatial-data';
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
-import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
+import {clearReadingHighlight, pageReading, readingUnits, stepReadingParagraph} from '../reading';
 import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES, type ReviewFocus, type ReviewStance} from '../reading-spans';
 import {hueHex, parseAppearance} from './appearance';
 import {relationLabel} from './labels';
@@ -48,7 +48,6 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
   const rightAsideRef = useRef<HTMLElement>(null);
   const cursorRef = useRef<ReaderCursor>(INITIAL_READER_CURSOR);
   const stageRef = useRef<HTMLDivElement>(null);
-  const lastIndexRef = useRef<{left: number | null; right: number | null}>({left: null, right: null});
   const paragraphRef = useRef(-1);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
@@ -59,7 +58,6 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
   useEffect(() => {
     clearReadingHighlight();
     cursorRef.current = INITIAL_READER_CURSOR;
-    lastIndexRef.current = {left: null, right: null};
     panStage(stageRef.current, null, null, false);
     paragraphRef.current = -1;
     setLoaded(null); setError('');
@@ -125,12 +123,18 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
         }
         const leftEls = satellitesIn(leftAsideRef.current), rightEls = satellitesIn(rightAsideRef.current);
         const counts = {left: leftEls.length, right: rightEls.length};
+        // Entering a side column from the article: land on the satellite level with what is being read —
+        // the current paragraph if one is selected, else the middle of the view once scrolled — and on the
+        // top item when nothing is selected and nothing has been scrolled.
         const enterSide = arrow === 'ArrowLeft' ? 'left' : 'right';
-        const remembered = lastIndexRef.current[enterSide];
-        const enterIndex = cursor.column === 'center' ? (remembered ?? 0) : 0;
+        let enterIndex = 0;
+        if (cursor.column === 'center') {
+          const els = enterSide === 'left' ? leftEls : rightEls;
+          const refY = readingReferenceY(scroller, article, paragraphRef.current);
+          enterIndex = refY === null ? 0 : nearestIndexToY(els, refY);
+        }
         const next = moveReaderCursor(cursor, arrow, counts, enterIndex);
         cursorRef.current = next;
-        if (next.column !== 'center') lastIndexRef.current[next.column] = next.index;
         // The cursor moves the view, not just a highlight: the current item is brought to the middle of the
         // reader and the rest of its column steps back (CSS on aria-current), so the eye follows the move.
         if (next.column === 'center') {
@@ -180,7 +184,6 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           if (!side) return;
           const index = satellitesIn(side === 'left' ? leftAsideRef.current : rightAsideRef.current).indexOf(sat);
           cursorRef.current = {column: side, index: Math.max(0, index)};
-          lastIndexRef.current[side] = Math.max(0, index);
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           sat.setAttribute('aria-current', 'true'); sat.focus({preventScroll: true});
           panStage(stageRef.current, scroller, sat, !reducedMotion);
@@ -288,6 +291,27 @@ function panStage(stage: HTMLElement | null, scroller: HTMLElement | null, el: H
 
 function satellitesIn(aside: HTMLElement | null): HTMLElement[] {
   return aside ? Array.from(aside.querySelectorAll<HTMLElement>('.universe-satellite')) : [];
+}
+
+
+/** Vertical reference for entering a side column: centre of the selected paragraph, else the view's middle
+ * when the article has been scrolled, else null (nothing selected, nothing read yet → top item). */
+function readingReferenceY(scroller: HTMLElement, article: HTMLElement, paragraph: number): number | null {
+  if (paragraph >= 0) {
+    const body = article.querySelector<HTMLElement>('.universe-doc-text');
+    if (body) {
+      const units = readingUnits({article: scroller, title: article.querySelector<HTMLElement>('.universe-doc-title'), body});
+      const range = units[paragraph];
+      if (range) { const r = range.getBoundingClientRect(); return (r.top + r.bottom) / 2; }
+    }
+  }
+  if (scroller.scrollTop > 8) { const sr = scroller.getBoundingClientRect(); return sr.top + sr.height / 2; }
+  return null;
+}
+function nearestIndexToY(elements: HTMLElement[], y: number): number {
+  let best = 0, bestDist = Infinity;
+  elements.forEach((el, index) => { const r = el.getBoundingClientRect(); const d = Math.abs((r.top + r.bottom) / 2 - y); if (d < bestDist) { bestDist = d; best = index; } });
+  return best;
 }
 
 function clearSatelliteCurrent(aside: HTMLElement | null): void {
