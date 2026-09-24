@@ -1016,6 +1016,11 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       schedulePaint();
     };
     window.addEventListener('resize', onResize);
+    // A tab that loads in the background gets no animation frames: when it becomes visible, paint the
+    // current camera and let nearby bodies load, so the first view is never a stale frame from before the fit.
+    const onVisible = () => { if (document.visibilityState === 'visible') { schedulePaint(); markCameraChanged(); } };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
     // A tab opened in the background can change size without a window resize event.
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(container);
@@ -1111,6 +1116,8 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     return () => {
       mountedRef.current = false;
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
       resizeObserver.disconnect();
       chromeObserver.disconnect();
       narrowQuery.removeEventListener('change', onNarrowChange);
