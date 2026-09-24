@@ -147,7 +147,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           el?.setAttribute('aria-current', 'true');
           el?.focus({preventScroll: true});
-          if (el) panStage(stageRef.current, scroller, el, smooth);
+          if (el) panStage(stageRef.current, scroller, el, smooth, cursor.column === 'center' ? 'x' : 'both');
         }
         return;
       }
@@ -186,7 +186,7 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
           cursorRef.current = {column: side, index: Math.max(0, index)};
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           sat.setAttribute('aria-current', 'true'); sat.focus({preventScroll: true});
-          panStage(stageRef.current, scroller, sat, !reducedMotion);
+          panStage(stageRef.current, scroller, sat, !reducedMotion, 'x');
           return;
         }
         if (articleRef.current && articleRef.current.contains(target) && cursorRef.current.column !== 'center') {
@@ -265,14 +265,25 @@ function satellite(key: string, kind: string, caption: string, body: ReactNode, 
 function easeInOutCubic(t: number): number { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
 let panRaf: number | null = null;
 let panNow = {x: 0, y: 0};
-function panStage(stage: HTMLElement | null, scroller: HTMLElement | null, el: HTMLElement | null, smooth: boolean): void {
+/** `axis: 'x'` (entering a column from the article) moves sideways only and touches y just enough to keep the
+ * item inside the view; `axis: 'both'` (Up/Down within a column) centres on both axes. */
+function panStage(stage: HTMLElement | null, scroller: HTMLElement | null, el: HTMLElement | null, smooth: boolean, axis: 'x' | 'both' = 'both'): void {
   if (!stage) return;
   let target = {x: 0, y: 0};
   if (el && scroller) {
     const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect();
     // er already includes the current pan; remove it to get the resting position, then aim at the centre.
     const restCx = (er.left + er.right) / 2 - panNow.x, restCy = (er.top + er.bottom) / 2 - panNow.y;
-    target = {x: sr.left + sr.width / 2 - restCx, y: sr.top + sr.height / 2 - restCy};
+    const x = sr.left + sr.width / 2 - restCx;
+    if (axis === 'both') target = {x, y: sr.top + sr.height / 2 - restCy};
+    else {
+      // Keep the current vertical pan; nudge only if the item would sit outside the view (24px margin).
+      const margin = 24, top = er.top - panNow.y + panNow.y, bottom = er.bottom;
+      let y = panNow.y;
+      if (top < sr.top + margin) y += sr.top + margin - top;
+      else if (bottom > sr.bottom - margin) y -= bottom - (sr.bottom - margin);
+      target = {x, y};
+    }
   }
   if (panRaf !== null) { cancelAnimationFrame(panRaf); panRaf = null; }
   const from = {...panNow};
