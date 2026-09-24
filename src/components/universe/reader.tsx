@@ -124,15 +124,20 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
         const enterIndex = cursor.column === 'center' ? nearestIndex(arrow === 'ArrowLeft' ? leftEls : rightEls, scroller) : 0;
         const next = moveReaderCursor(cursor, arrow, counts, enterIndex);
         cursorRef.current = next;
+        // The cursor moves the view, not just a highlight: the current item is brought to the middle of the
+        // reader and the rest of its column steps back (CSS on aria-current), so the eye follows the move.
+        const behavior: ScrollBehavior = smooth ? 'smooth' : 'auto';
         if (next.column === 'center') {
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           article.focus({preventScroll: true});
+          article.scrollIntoView({block: 'nearest', behavior});
         } else {
           const els = next.column === 'left' ? leftEls : rightEls;
           const el = els[next.index];
           clearSatelliteCurrent(leftAsideRef.current); clearSatelliteCurrent(rightAsideRef.current);
           el?.setAttribute('aria-current', 'true');
           el?.focus({preventScroll: true});
+          el?.scrollIntoView({block: 'center', behavior});
         }
         return;
       }
