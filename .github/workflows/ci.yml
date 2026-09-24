@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Plain postgres:16 is enough: the `vector` extension is only created by
+        # the Supabase-project connectivity probe (20260919153000_setup_connectivity.sql),
+        # which scripts/migrations.mjs deliberately excludes from the product
+        # migration list applied to test databases (see PROBE_FILE there).
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kb_core_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/kb_core_test_ci
+      ALLOW_TEST_DB_WRITES: '1'
+      ACK_DISPOSABLE_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run test:functional
+
+      - name: Apply migrations to the disposable test database
+        run: node scripts/apply-test-db.mjs
+
+      - run: npm run test:db
+
+      - name: Build
+        # No live database is needed: databaseConfig() only validates
+        # NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY shape at request time,
+        # not at build time. Dummy values satisfy build-time checks only.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          SUPABASE_KEY_MODE: publishable_secret
+          SUPABASE_SECRET_KEY: sb_ci_placeholder_key_not_a_real_secret_value
+          CURSOR_SIGNING_KEY: ci-placeholder-cursor-signing-key-32-bytes-min
+        run: npm run build

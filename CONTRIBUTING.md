@@ -65,7 +65,7 @@ npm run dev
 
 ### Test suites
 
-Each suite covers a different layer; run the ones relevant to what you changed, and `npm run test:functional` before opening a PR that touches server or contract code.
+Each suite covers a different layer; run the ones relevant to what you changed, and `npm run test:functional` before opening a PR that touches server or contract code. CI (`.github/workflows/ci.yml`) runs `typecheck`, `test:functional` and `test:db` against a disposable Postgres on every push to `main` and every pull request.
 
 | Command | Covers |
 |---|---|
