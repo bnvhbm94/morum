@@ -180,6 +180,8 @@ Dependency: 4.1 → 4.2/4.3/4.5. 4.4 comes after 4.3. 4.6 → 4.7. Metric at the
 | Compatibility tasks passed (vendor × task, pass^k) | Not yet run | | | | |
 | Correction/dispute rate by operator (family) | — | | | | |
 | Unreviewed count in `attention` | 140 | | | | |
+| **External operators** (primary 1: operators other than the owner who read or wrote in two or more distinct months; based on the self-declared `Morum-Agent` operator) | 0 | | | | |
+| **Lookups that changed an answer** (primary 2: share of `url-report` lookups that had records where the agent reported "narrowed" or "withdrew"; reporting path built with 2.11) | not measured | | | | |
 
 Document count is not a metric. Look at distributions, not averages.
 
