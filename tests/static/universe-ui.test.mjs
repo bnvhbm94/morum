@@ -92,3 +92,18 @@ test('while the reader is open, Left/Right step to the adjacent planet instead o
   // The star's placement order is by id, the same order placeOrbits itself sorts planets by.
   assert.match(source, /a\.item\.id < b\.item\.id \? -1 : a\.item\.id > b\.item\.id \? 1 : 0/);
 });
+
+test('A1: while the camera is moving, data-moving is set on the root and CSS disables item/label/reticle transitions', () => {
+  assert.match(source, /rootElRef\.current\?\.setAttribute\('data-moving'/);
+  assert.match(source, /data-moving="false"/);
+  assert.match(styles, /\.universe-root\[data-moving="true"\][^{]*\.universe-item-title[^{]*\{[^}]*transition:\s*none/s);
+  assert.match(styles, /\.universe-root\[data-moving="true"\][^{]*\.universe-category-label/);
+  assert.match(styles, /\.universe-root\[data-moving="true"\][^{]*\.universe-reticle/);
+});
+
+test('A1: label anchors/visibility are frozen during motion and only changed labels get the fade marker', () => {
+  assert.match(source, /resolveMotionLabels\(movingRef\.current/);
+  assert.match(source, /dataset\.labelChanged/);
+  assert.match(styles, /data-label-changed="true"/);
+  assert.match(styles, /universe-label-fade-in/);
+});

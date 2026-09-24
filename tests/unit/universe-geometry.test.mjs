@@ -12,7 +12,7 @@ import {
   PAD,
 } from '../../src/components/universe/layout.ts';
 import {bodyKind, starCircle} from '../../src/components/universe/celestial.ts';
-import {estimateLabelWidth, resolveLabels, placeDotLabels, LABEL_ANCHOR_ORDER} from '../../src/components/universe/labels.ts';
+import {estimateLabelWidth, resolveLabels, placeDotLabels, resolveMotionLabels, diffLabelState, LABEL_ANCHOR_ORDER} from '../../src/components/universe/labels.ts';
 import {
   worldToScreen,
   screenToWorld,
@@ -539,14 +539,14 @@ test('labels: overlapping boxes keep the higher priority, zooming apart shows bo
 
 test('labels: a planet title tries all 8 fixed anchors before it gives up, in the given order', () => {
   // A single obstacle sits exactly below the dot, at the default ("b") anchor's spot: the title must move to
-  // the next anchor in LABEL_ANCHOR_ORDER ("t") rather than disappear.
+  // the next anchor in LABEL_ANCHOR_ORDER ("r", 4-9's preference order b/r/t/l/br/bl/tr/tl) rather than disappear.
   const blockers = [{id: 'obstacle', x: 0, y: 20, width: 40, height: 16, priority: 10}];
-  const placed = placeDotLabels([{id: 'p', x: 0, y: 0, width: 40, height: 16, priority: 1}], {gap: 12, blockers});
-  assert.equal(placed.get('p').anchor, 't');
+  const placed = placeDotLabels([{id: 'p', x: 0, y: 0, width: 40, height: 16, priority: 1}], {axisGap: 12, diagGap: 12, blockers});
+  assert.equal(placed.get('p').anchor, 'r');
 
   // Ring every anchor spot with a blocker: nothing is left, so the label is dropped rather than overlapping.
   const surrounded = LABEL_ANCHOR_ORDER.map((anchor, i) => ({id: `ring${i}`, x: 0, y: anchor.includes('b') ? 20 : anchor.includes('t') ? -20 : 0, width: 200, height: 200, priority: 10}));
-  const none = placeDotLabels([{id: 'q', x: 0, y: 0, width: 40, height: 16, priority: 1}], {gap: 12, blockers: surrounded});
+  const none = placeDotLabels([{id: 'q', x: 0, y: 0, width: 40, height: 16, priority: 1}], {axisGap: 12, diagGap: 12, blockers: surrounded});
   assert.equal(none.has('q'), false);
 });
 
@@ -559,7 +559,7 @@ test('labels: 30 planets in a 400px field — most get a placed, non-overlapping
     const angle = (i / n) * Math.PI * 2;
     return {id: `planet-${i}`, x: field / 2 + Math.cos(angle) * (field * 0.32), y: field / 2 + Math.sin(angle) * (field * 0.32), width: 70, height: 16, priority: n - i};
   });
-  const placed = placeDotLabels(dots, {gap: 12, pad: 6});
+  const placed = placeDotLabels(dots, {axisGap: 12, diagGap: 12, pad: 6});
   assert.ok(placed.size / n >= 0.9, `expected at least 90% placed, got ${placed.size}/${n}`);
   const boxes = [...placed.values()];
   for (let i = 0; i < boxes.length; i += 1) {
@@ -569,4 +569,33 @@ test('labels: 30 planets in a 400px field — most get a placed, non-overlapping
       assert.ok(!overlap, `placed labels ${a.id} and ${b.id} overlap`);
     }
   }
+});
+
+// ---- Motion stability (A1/A4): the frozen-during-motion, recompute-when-still state machine. Pure and
+// DOM-free, so it is tested directly rather than through the paint loop.
+test('resolveMotionLabels: moving=true freezes the previous state and reports no changes', () => {
+  const prev = {visible: new Set(['a', 'b']), anchors: new Map([['a', 'b'], ['b', 't']])};
+  let calls = 0;
+  const {state, changed} = resolveMotionLabels(true, prev, () => { calls += 1; return {visible: new Set(['a']), anchors: new Map([['a', 'l']])}; });
+  assert.equal(calls, 0, 'computeNext must not run while the camera is moving');
+  assert.equal(state, prev, 'the frozen state is returned unchanged (same reference)');
+  assert.equal(changed.size, 0);
+});
+
+test('resolveMotionLabels: moving=false recomputes once the camera is still', () => {
+  const prev = {visible: new Set(['a']), anchors: new Map([['a', 'b']])};
+  const next = {visible: new Set(['a', 'c']), anchors: new Map([['a', 'b'], ['c', 'r']])};
+  const {state} = resolveMotionLabels(false, prev, () => next);
+  assert.equal(state, next);
+});
+
+test('resolveMotionLabels/diffLabelState: only labels whose visibility or anchor actually changed are flagged', () => {
+  const prev = {visible: new Set(['a', 'b']), anchors: new Map([['a', 'b'], ['b', 'b']])};
+  // a: same anchor, unchanged. b: anchor moved from "b" to "r", changed. c: newly visible, changed.
+  // (d was visible before and is gone now, changed.)
+  const withD = {visible: new Set(['a', 'b', 'd']), anchors: new Map([['a', 'b'], ['b', 'b'], ['d', 't']])};
+  const next = {visible: new Set(['a', 'b', 'c']), anchors: new Map([['a', 'b'], ['b', 'r'], ['c', 't']])};
+  assert.deepEqual([...diffLabelState(withD, next)].sort(), ['b', 'c', 'd']);
+  const {changed} = resolveMotionLabels(false, withD, () => next);
+  assert.deepEqual([...changed].sort(), ['b', 'c', 'd']);
 });

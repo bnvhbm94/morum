@@ -14,7 +14,7 @@ import {worldToScreen, screenToWorld, zoomAt, panBy, fitCircle, interpolate, ine
 import {screenRadius, stageFor, stageScale, isVisible, pickFetchTargets, directionalNode, itemsOpen, STAGE_PX, type Stage, type FetchCandidate} from './lod';
 import {makeStarfield, paintStarfield, drawCategoryPoint, drawCategoryParticles, drawCategoryGlow, drawStarCore, makeCategoryParticles, type Star, type Particle} from './starfield';
 import {bodyKind, starCircle, CENTER_HOLE, type BodyKind} from './celestial';
-import {estimateLabelWidth, resolveLabels, placeDotLabels, type LabelBox, type LabelAnchor} from './labels';
+import {estimateLabelWidth, resolveLabels, placeDotLabels, resolveMotionLabels, EMPTY_LABEL_STATE, type LabelBox, type LabelAnchor, type LabelState} from './labels';
 import UniverseReader, {readerTargetKey, relationLabel, type ReaderNeighbor, type ReaderTarget} from './reader';
 import {hueHex} from './appearance';
 import './universe.css';
@@ -63,7 +63,9 @@ function labelMaxPx(starRadiusPx: number, viewportWidth: number): number {
   return Math.max(base, Math.min(520, starRadiusPx * 0.45));
 }
 const LABEL_PAD_PX = 10;
-const LABEL_GAP_PX = 9;
+/** Planet label offset from the dot's surface: 10px on the four axis anchors, 9px on the diagonals (4-1). */
+const LABEL_AXIS_GAP_PX = 10;
+const LABEL_DIAG_GAP_PX = 9;
 /** Screen radius of a planet's drawn dot; labels hang below the dot, not below the (larger) hit circle. */
 const DOT_PX = 3;
 /** A far star shows its name below its cluster once the cluster is this many pixels across. */
@@ -85,9 +87,8 @@ function insideViewport(x: number, y: number, width: number, height: number, vie
   return x - width / 2 >= EDGE_PX && x + width / 2 <= viewport.width - EDGE_PX && y - height / 2 >= EDGE_PX && y + height / 2 <= viewport.height - chromePx;
 }
 /** A planet's opening lines appear under its title once its star fills this many screen pixels of radius. */
-const SNIPPET_STAR_PX = 720;
-const SNIPPET_BOX = {width: 224, height: 44};
-const UNTITLED_LABEL_CHARS = 28;
+/** Untitled records: the label is cut to this many code points, broken at a word boundary, no trailing "…" (4-3). */
+const UNTITLED_LABEL_CHARS = 18;
 const KEY_ZOOM = 1.35;
 const SHOW_STARFIELD = false;
 const DOUBLE_CLICK_ZOOM = 2.4;
@@ -97,13 +98,21 @@ const ZOOM_SMOOTHING = 0.28;
 
 function itemKey(categoryId: string, itemId: string): string { return `${categoryId}::${itemId}`; }
 function splitItemKey(key: string): [string, string] { const i = key.indexOf('::'); return [key.slice(0, i), key.slice(i + 2)]; }
-/** Untitled records are labelled by their opening clause only; the full text belongs in the reader, not on the field. */
+/** Untitled records are labelled by the first 18 code points of their opening text, cut at a word boundary,
+ * with no trailing "…" (4-3: an ellipsis reads as something hidden; the field is not a table of contents).
+ * Titled records keep their title as-is, but a trailing sentence period is dropped (the field label is not a
+ * sentence). Code points, not UTF-16 units, so a multi-byte character is never split in half. */
 function itemLabel(item: UniverseItem): string {
-  if (!item.node.untitled) return item.title;
+  if (!item.node.untitled) {
+    const title = item.title.trim();
+    return /[.。]$/.test(title) ? title.slice(0, -1) : title;
+  }
   const text = item.snippet.replace(/\s+/g, ' ').trim();
-  const clause = text.split(/(?<=[.。!?])\s|[,，]\s/)[0] || text;
-  const chars = Array.from(clause);
-  return chars.length > UNTITLED_LABEL_CHARS ? `${chars.slice(0, UNTITLED_LABEL_CHARS).join('')}…` : clause;
+  const chars = Array.from(text);
+  if (chars.length <= UNTITLED_LABEL_CHARS) return text;
+  const cut = chars.slice(0, UNTITLED_LABEL_CHARS).join('');
+  const lastSpace = cut.lastIndexOf(' ');
+  return lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
 }
 /** Flight time grows a little with the zoom change, so long dives read as travel and short hops stay quick. */
 /** Planet label font for a star of this screen radius. */
@@ -147,6 +156,14 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
   const labelsRef = useRef<Set<string>>(new Set());
   /** Which of the 8 fixed anchors each shown planet title landed on, set alongside labelsRef each paint. */
   const labelAnchorsRef = useRef<Map<string, LabelAnchor>>(new Map());
+  /** A1: the last still-camera label recompute (labelsRef/labelAnchorsRef are always derived from this). */
+  const labelStateRef = useRef<LabelState>(EMPTY_LABEL_STATE);
+  /** Item keys whose anchor or visibility changed on the last recompute — these get the one-paint fade class. */
+  const labelChangedRef = useRef<Set<string>>(new Set());
+  /** True from the first camera-changing input until STILL_MS after the last one (A1: drag, wheel, pinch,
+   * flight, inertia). While true, paint() freezes label anchors/visibility and DOM stage/tier membership. */
+  const movingRef = useRef(false);
+  const rootElRef = useRef<HTMLDivElement>(null);
   /** Declared relations of the open or selected document: version id → predicate label, for marking planets. */
   const relatedRef = useRef<Map<string, string>>(new Map());
 
@@ -267,7 +284,8 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       const entry = itemCirclesRef.current.get(categoryId)?.get(itemId);
       const highlight = highlightRef.current;
       const labels = labelsRef.current;
-      el.dataset.detail = labels.has(`${key}#s`) ? 'snippet' : labels.has(key) ? 'title' : 'none';
+      el.dataset.detail = labels.has(key) ? 'title' : 'none';
+      el.dataset.titled = entry && !entry.item.node.untitled ? 'true' : 'false';
       el.dataset.highlight = highlight && highlight.itemId === itemId && now < highlight.until ? 'true' : 'false';
       const related = entry?.item.versionId ? relatedRef.current.get(entry.item.versionId) : undefined;
       if (related) el.dataset.related = related; else delete el.dataset.related;
@@ -284,6 +302,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       el.style.setProperty('--label-lines', entry && estimateLabelWidth(itemLabel(entry.item), font) > maxWidth ? '2' : '1');
       el.style.setProperty('--label-fade', Math.max(0, Math.min(1, (starRadiusPx - LABEL_FADE_START_PX * stageScale(viewport)) / (LABEL_FADE_START_PX * stageScale(viewport)))).toFixed(3));
       el.dataset.anchor = labelAnchorsRef.current.get(key) ?? 'b';
+      // A1: only a label whose anchor or visibility actually changed on the last (still-camera) recompute
+      // gets the brief fade-in; the class is applied for one paint and then cleared by paintLabelChanges.
+      if (labelChangedRef.current.has(key)) el.dataset.labelChanged = 'true'; else delete el.dataset.labelChanged;
     } else {
       const entry = categoriesRef.current.get(key);
       el.dataset.stage = entry ? stageFor(screenRadius(entry.circle, camera), entry.category.directCount > 0, entry.category.childCount > 0, stageScale(viewport)) : 'nebula';
@@ -294,16 +315,22 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         const starRadiusPx = screenRadius(entry.star, camera);
         const nameFont = nameFontPx(starRadiusPx);
         el.style.setProperty('--name-size', `${nameFont.toFixed(2)}px`);
-        el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
+        const isStar = entry.kind === 'star' || entry.kind === 'galaxy-star';
         // The reticle hugs the star's own core light (the small bright disc drawStarCore actually paints,
         // starRadiusPx * 0.09 clamped to [2.5, 48]), not the (much larger) hit circle around it — the hit
         // area itself is untouched. A plain galaxy has no core light to hug, so it falls back to the hit
-        // circle's own edge, same as before.
-        if (entry.kind === 'star' || entry.kind === 'galaxy-star') {
+        // circle's own edge, same as before. Capped by the name's own width too, so up close it never grows
+        // into a field of scattered ticks (4-5).
+        if (isStar) {
           const coreLightRadiusPx = Math.max(2.5, Math.min(48, starRadiusPx * 0.09));
-          el.style.setProperty('--reticle-r', `${Math.max(28, Math.min(72, coreLightRadiusPx + 8)).toFixed(1)}px`);
+          const nameWidthPx = estimateLabelWidth(entry.category.label, nameFont);
+          el.style.setProperty('--reticle-r', `${Math.max(12, Math.min(coreLightRadiusPx + 6, nameWidthPx / 2 + 12, 64)).toFixed(1)}px`);
+          // The open star's name stays centred on the core light (owner choice); far away it hangs under
+          // its cluster as before.
+          el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
         } else {
           el.style.setProperty('--reticle-r', `${(r + 6).toFixed(1)}px`);
+          el.style.setProperty('--name-dy', `${nameOffsetPx(el.dataset.stage as Stage, r, nameFont).toFixed(1)}px`);
         }
       }
     }
@@ -363,8 +390,9 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     const itemNodes: {key: string; radiusPx: number}[] = [];
     const boxes: LabelBox[] = [];
     // Planet titles are placed after every star's name is known (so a title never loses to a star name
-    // that happened to be drawn later), each against its own star's dots.
-    const pendingStars: {snippetsOn: boolean; font: number; lineHeight: number; starRadiusPx: number; dots: {itemId: string; x: number; y: number}[]; labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[]}[] = [];
+    // that happened to be drawn later), each against its own star's dots. `centerDist` (4-9/1-2) lets stars
+    // closer to the screen centre claim their planets' label spots first, against one shared occupancy grid.
+    const pendingStars: {centerDist: number; dots: {itemId: string; x: number; y: number}[]; labels: {id: string; itemId: string; x: number; y: number; width: number; height: number; priority: number; entryItem: ItemEntry}[]}[] = [];
     for (const [id, entry] of categoriesRef.current) {
       if (!isVisible(entry.circle, camera, viewport)) continue;
       const radiusPx = screenRadius(entry.circle, camera);
@@ -406,7 +434,6 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
       if (open) {
         const items = itemCirclesRef.current.get(id);
         if (!items) continue;
-        const snippetsOn = starRadiusPx >= SNIPPET_STAR_PX;
         const font = labelFontPx(starRadiusPx);
         const lineHeight = Math.round(font * 1.35);
         // Every drawn dot is an obstacle: a title never lands on another planet.
@@ -435,41 +462,53 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
           const height = lineHeight * lines;
           labels.push({id: key, itemId, x: pos.x, y: pos.y, width, height, priority, entryItem});
         }
-        pendingStars.push({snippetsOn, font, lineHeight, starRadiusPx, dots, labels});
+        const centerDist = Math.hypot(screenPos.x - viewport.width / 2, screenPos.y - viewport.height / 2);
+        pendingStars.push({centerDist, dots, labels});
       }
     }
-    // Planet titles: up to 8 fixed anchors around the dot (below, above, right, left, then the diagonals)
-    // before a label gives up — a star's own name (already in `boxes`) still always wins the spot it sits on.
-    const resolved = resolveLabels(boxes, LABEL_PAD_PX);
-    const anchors = new Map<string, LabelAnchor>();
-    for (const star of pendingStars) {
-      const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
-        !star.dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
-      const allowed = (id: string, x: number, y: number, width: number, height: number): boolean =>
-        selectedKeyRef.current === id || (insideViewport(x, y, width, height, viewport, chromeHeightRef.current) && clearOfDots(id.includes('::') ? splitItemKey(id)[1] : id, x, y, width, height));
-      const placed = placeDotLabels(star.labels, {gap: DOT_PX + LABEL_GAP_PX, pad: LABEL_PAD_PX, blockers: boxes, allowed});
-      for (const label of star.labels) {
-        const at = placed.get(label.id);
-        if (!at) continue;
-        resolved.add(label.id);
-        anchors.set(label.id, at.anchor);
-        // The snippet's CSS sits fixed below the title (it never had its own anchors); only show it when the
-        // title actually landed in its default spot below the dot.
-        if (at.anchor === 'b' && star.snippetsOn && !label.entryItem.item.node.untitled && label.entryItem.item.snippet) {
-          const snippetY = at.y + at.height / 2 + 4 + SNIPPET_BOX.height / 2;
-          const snippetId = `${label.id}#s`;
-          if (insideViewport(at.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height, viewport, chromeHeightRef.current) && clearOfDots(label.itemId, at.x, snippetY, SNIPPET_BOX.width, SNIPPET_BOX.height))
-            resolved.add(snippetId);
+    // A1: while the camera is moving, freeze the last computed label anchors/visibility instead of
+    // recomputing them (and the DOM stage/tier sets below) every frame — only the camera transform moves.
+    const {state: labelState, changed} = resolveMotionLabels(movingRef.current, labelStateRef.current, () => {
+      // Planet titles: up to 8 fixed anchors around the dot (below, right, above, left, then the diagonals)
+      // before a label gives up — a star's own name (already in `boxes`) still always wins the spot it sits
+      // on. 1-2/4-9: one shared occupancy grid across every star, closest-to-centre star claiming spots
+      // first, so neighbouring stars' labels never overlap each other.
+      const resolved = resolveLabels(boxes, LABEL_PAD_PX);
+      const anchors = new Map<string, LabelAnchor>();
+      const occupied: LabelBox[] = [...boxes];
+      const ordered = [...pendingStars].sort((a, b) => a.centerDist - b.centerDist);
+      for (const star of ordered) {
+        const clearOfDots = (self: string, x: number, y: number, width: number, height: number): boolean =>
+          !star.dots.some(d => d.itemId !== self && Math.abs(d.x - x) * 2 < width + DOT_PX * 2 + 6 && Math.abs(d.y - y) * 2 < height + DOT_PX * 2 + 6);
+        const allowed = (id: string, x: number, y: number, width: number, height: number): boolean =>
+          selectedKeyRef.current === id || (insideViewport(x, y, width, height, viewport, chromeHeightRef.current) && clearOfDots(id.includes('::') ? splitItemKey(id)[1] : id, x, y, width, height));
+        const placed = placeDotLabels(star.labels, {axisGap: DOT_PX + LABEL_AXIS_GAP_PX, diagGap: DOT_PX + LABEL_DIAG_GAP_PX, pad: LABEL_PAD_PX, blockers: occupied, allowed});
+        for (const label of star.labels) {
+          const at = placed.get(label.id);
+          if (!at) continue;
+          resolved.add(label.id);
+          anchors.set(label.id, at.anchor);
+          occupied.push({id: label.id, x: at.x, y: at.y, width: at.width, height: at.height, priority: label.priority});
         }
       }
+      return {visible: resolved, anchors};
+    });
+    labelStateRef.current = labelState;
+    labelChangedRef.current = changed;
+    if (changed.size > 0) {
+      // Clear the one-paint fade marker once the 160ms CSS animation has had time to run, so it never
+      // replays for a label that did not change again on the next still recompute.
+      setTimeout(() => { labelChangedRef.current = new Set(); schedulePaint(); }, 200);
     }
-    labelAnchorsRef.current = anchors;
-    labelsRef.current = resolved;
+    labelAnchorsRef.current = labelState.anchors;
+    labelsRef.current = labelState.visible;
 
-    catNodes.sort((a, b) => b.radiusPx - a.radiusPx);
-    itemNodes.sort((a, b) => b.radiusPx - a.radiusPx);
     positionDomButtons(camera, viewport);
-    commitDom(catNodes.slice(0, MAX_DOM_CATEGORIES).map(n => n.id), itemNodes.slice(0, MAX_DOM_ITEMS).map(n => n.key));
+    if (!movingRef.current) {
+      catNodes.sort((a, b) => b.radiusPx - a.radiusPx);
+      itemNodes.sort((a, b) => b.radiusPx - a.radiusPx);
+      commitDom(catNodes.slice(0, MAX_DOM_CATEGORIES).map(n => n.id), itemNodes.slice(0, MAX_DOM_ITEMS).map(n => n.key));
+    }
 
     const nextCrumb = computeCrumb();
     setCrumbText(prev => (prev === nextCrumb ? prev : nextCrumb));
@@ -583,9 +622,20 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
     fetchControllersRef.current.delete(controller);
   }
 
+  /** A1: flips the root's `data-moving` attribute directly (no React state/re-render — this can fire every
+   * animation frame during a flight or inertia glide). CSS keyed off it turns off dot/label/button transitions
+   * for the duration, so nothing "shuffles" mid-motion; it flips back once the camera is STILL_MS quiet. */
+  function setMoving(value: boolean): void {
+    if (movingRef.current === value) return;
+    movingRef.current = value;
+    rootElRef.current?.setAttribute('data-moving', value ? 'true' : 'false');
+    if (!value) schedulePaint(); // one recompute now that the camera is still again
+  }
+
   function markCameraChanged(): void {
+    setMoving(true);
     if (stillTimerRef.current) clearTimeout(stillTimerRef.current);
-    stillTimerRef.current = setTimeout(() => { stillTimerRef.current = null; void fetchNearby(); }, STILL_MS);
+    stillTimerRef.current = setTimeout(() => { stillTimerRef.current = null; setMoving(false); void fetchNearby(); }, STILL_MS);
   }
 
   function clearHoverHideTimer(): void {
@@ -687,7 +737,7 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         const t = Math.min(1, (now - start) / duration);
         cameraRef.current = interpolate(from, target, t);
         schedulePaint();
-        if (t < 1) { flightRafRef.current = requestAnimationFrame(tick); }
+        if (t < 1) { setMoving(true); flightRafRef.current = requestAnimationFrame(tick); }
         else { flightRafRef.current = null; flightResolveRef.current = null; afterFly(categoryId); resolve(); }
       };
       flightRafRef.current = requestAnimationFrame(tick);
@@ -1486,13 +1536,12 @@ export default function Universe({initialDoc}: {initialDoc?: string} = {}) {
         <span className="universe-item-dot" aria-hidden="true" />
         <span className="universe-reticle" aria-hidden="true" />
         <span className="universe-item-title">{itemLabel(entry.item)}</span>
-        {!entry.item.node.untitled && <span className="universe-item-snippet">{entry.item.snippet}</span>}
       </button>
     );
   }
 
   return (
-    <div className="universe-root" data-reading={reader !== null} data-search-open={searchOpen}>
+    <div ref={rootElRef} className="universe-root" data-reading={reader !== null} data-search-open={searchOpen} data-moving="false">
       <canvas ref={canvasRef} className="universe-canvas" aria-hidden="true" />
       <div ref={containerRef} className="universe-viewport" tabIndex={-1} aria-hidden={reader !== null}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}

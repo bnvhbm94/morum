@@ -9,7 +9,7 @@ import {loadSpatialCitations, loadSpatialDossier, loadSpatialHistory, loadSpatia
 import {errorMessage} from '../../lib/api-client';
 import {citeMark, renderCitedBody} from '../cited-body';
 import {clearReadingHighlight, pageReading, stepReadingParagraph} from '../reading';
-import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES} from '../reading-spans';
+import {countReviewsByFocus, QUOTE_CHECK_TEXT, REVIEW_FOCUS_ROWS, REVIEW_STANCES, type ReviewFocus, type ReviewStance} from '../reading-spans';
 import {hueHex, parseAppearance} from './appearance';
 import {relationLabel} from './labels';
 
@@ -137,10 +137,15 @@ export default function UniverseReader({target, reducedMotion, onClose, onOpenVe
                 ? <h2 className="universe-doc-title" id="universe-doc-title">{loaded.view.version.title}</h2>
                 : <h2 className="universe-sr-only" id="universe-doc-title">제목 없는 기록</h2>}
               <div className="universe-doc-text">{renderCitedBody(loaded.view.version.body_text, loaded.citations, 'universe-cite', loaded.meanings)}</div>
+              {/* 1-10: "원문" here used to sit right next to the quote-check line's promise that the server
+                  never opens the source page — same screen, contradicting words. Renamed to what the raw link
+                  actually is: the server's own stored text file, not "the original". */}
               <nav className="universe-doc-links" aria-label="문서 상세">
-                <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}`}>고정 링크와 전체 맥락</a>
-                <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}/raw`} target="_blank" rel="noreferrer">원문</a>
-                <a href={`/records/${encodeURIComponent(loaded.view.version.record_id)}/history`}>이력</a>
+                <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}`}>고정 링크</a>
+                <span aria-hidden="true"> · </span>
+                <a href={`/versions/${encodeURIComponent(loaded.view.version.id)}/raw`} target="_blank" rel="noreferrer">텍스트 파일</a>
+                <span aria-hidden="true"> · </span>
+                <a href={`/records/${encodeURIComponent(loaded.view.version.record_id)}/history`}>고친 이력</a>
               </nav>
             </article>
             <aside className="universe-satellites" data-side="right" aria-label="관계와 검토">
@@ -259,6 +264,12 @@ function reviewTable(dossier: Dossier | null): ReactNode {
     <div className="universe-review-table" aria-label="이 판에 단 검토">
       {rows.length === 0 ? (
         <p className="universe-review-empty">이 판에 단 검토 없음</p>
+      ) : rows.length === 1 ? (
+        // 1-9/3: one row reads better as a single inline line ("근거 뒷받침 — 반대 1") than as a whole table.
+        <>
+          <p className="universe-review-inline">{reviewInlineLine(rows[0], counts)}</p>
+          {truncated && <p className="universe-review-note">50건까지만 셈</p>}
+        </>
       ) : (
         <>
           <div className="universe-review-grid" role="table">
@@ -279,14 +290,25 @@ function reviewTable(dossier: Dossier | null): ReactNode {
           {truncated && <p className="universe-review-note">50건까지만 셈</p>}
         </>
       )}
+      {/* 1-6: two separate lines — a plain count, then (only when there is an anonymous count to explain) the
+         caveat that anonymous submissions are not a count of distinct reviewers. Zero-count halves are dropped
+         entirely, and no line at all shows when both are zero. */}
       {(keyedTotal > 0 || anonymousTotal > 0) && (
-        <p className="universe-review-note">
-          {`키 있는 검토자 ${keyedTotal} · 익명 제출 ${anonymousTotal}건`}
-          {anonymousTotal > 0 && ' 익명 제출 수는 서로 다른 검토자 수가 아닙니다.'}
-        </p>
+        <>
+          <p className="universe-review-note-primary">
+            {[keyedTotal > 0 ? `서명한 검토 ${keyedTotal}` : null, anonymousTotal > 0 ? `익명 검토 ${anonymousTotal}` : null].filter(Boolean).join(' · ')}
+          </p>
+          {anonymousTotal > 0 && <p className="universe-review-note">익명 검토는 몇 명이 했는지 알 수 없습니다.</p>}
+        </>
       )}
     </div>
   );
+}
+
+function reviewInlineLine(row: {focus: ReviewFocus; label: string}, counts: Map<ReviewFocus, Record<ReviewStance, number>>): string {
+  const c = counts.get(row.focus)!;
+  const parts = REVIEW_STANCES.filter(({stance}) => c[stance] > 0).map(({stance, label}) => `${label} ${c[stance]}`);
+  return `${row.label} — ${parts.join(' · ')}`;
 }
 
 // ---- Planet portrait (B §5): a 20px disc above the title, the open document's own `attributes.appearance`
