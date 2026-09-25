@@ -127,11 +127,13 @@ export function parseQueryInteger(value:string):number {ensure(/^(0|[1-9][0-9]*)
 /** POST /check body: shape + scalar checks only; the three bundled sub-commands are re-validated
  * with validateCommand by the handler once they are assembled, so limits (e.g. excerpt/submitted_text)
  * stay defined in exactly one place (the source.create case above). */
-const CHECK_FIELDS=['claim','title','record_id','url','excerpt','quote','explanation','published_at','retrieved_at','archive_url','attributes'] as const;
+const CHECK_FIELDS=['claim','title','record_id','version_id','url','excerpt','quote','explanation','published_at','retrieved_at','archive_url','attributes'] as const;
 export function validateCheckRequest(value:unknown):T.CheckRequest {
  const o=object(value,CHECK_FIELDS,CHECK_FIELDS);
- text(o.claim,4000,1);text(o.title,240,1,true);nilUuid(o.record_id);
+ text(o.claim,4000,1);text(o.title,240,1,true);nilUuid(o.record_id);nilUuid(o.version_id);
+ ensure(o.record_id===null||o.version_id===null);
  text(o.url,2048,1);text(o.excerpt,8000,1);text(o.quote,10000,1);text(o.explanation,8000,1);
+ ensure(cpLength(o.quote as string)<=cpLength(o.excerpt as string));
  date(o.published_at);date(o.retrieved_at);text(o.archive_url,2048,1,true);attributes(o.attributes);
  return o as unknown as T.CheckRequest;
 }

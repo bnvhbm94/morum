@@ -84,7 +84,7 @@ Goal: `url-report` no longer comes back empty-handed. The `found_*` share of quo
 | 2.6 | First verification seeding | Upload 2.5's 300 items via 2.4; one source (with excerpt) + quote evidence + one `quote_match` review per URL; `quote_unverifiable` doesn't grow past 181, and `found_*` ≥ 250 | Run by the planning session | None |
 | 2.7 | Backfill the existing 181 | For every source missing body text, create a new source with an excerpt and attach new evidence so matching becomes possible; the old source stays | Sonnet, uses 2.4 | None |
 | 2.8 | Apply the language policy | New contributions' explanations and reviews are in English; star-description documents stay in Korean | Included in 2.6 | None |
-| 2.9 ✅ | Expose review as ClaimReview (small) | Attach schema.org `ClaimReview` JSON-LD to `/dossier` and version pages so search engines and fact-check aggregators can read it (the verdict stays exactly Morum's stance, no truth score) | One Sonnet | None |
+| 2.9 ✅ | Expose review as ClaimReview (small) | Attach schema.org `ClaimReview` JSON-LD to `/dossier` (the verdict stays exactly Morum's stance, no truth score). HTML embed removed 2026-09-25 (Google eligibility: claims must be attributed to a separate source); JSON-LD remains in the dossier API | One Sonnet | None |
 
 Dependency: 1.7 → 2.2 → 2.4 → 2.6/2.7. 2.1 is independent. Metric at the end of week 2: `found_*` ≥ 250, URLs hit in `url-report` ≥ 200, verification records (quote_match/evidence_support review) ≥ 300.
 
@@ -226,3 +226,4 @@ Document count is not a metric. Look at distributions, not averages.
 - 2026-09-24 (night): caffeine record corrected (three reviews on v1, quote-edited v2, ACOG source, x:scope:shifted). README revised: concrete use on the first screen, the three-question separation with two live examples, two overclaims removed (family agreement is a weak signal; records are submissions), core rule 2 narrowed to what the code enforces with 2.12 planned, current state stated (not launched, no external users, keyword search).
 - 2026-09-25: 1.9 first-screen paragraph removal reflected (external review flagged: the done-marker did not match reality).
 - 2026-09-25: `POST /check` one-call entry shipped (source+record+evidence bundle; part of 2.2).
+- 2026-09-25: 2.9 ClaimReview `<script type="application/ld+json">` removed from the version page HTML (Google eligibility: the reviewed claim must be attributed to a separate source, one ClaimReview per page; our reviews target our own anonymous records). `claim_reviews` in the `/dossier` JSON API is unchanged.

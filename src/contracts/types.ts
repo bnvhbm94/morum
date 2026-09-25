@@ -199,12 +199,13 @@ export interface ObjectView {
 export interface CreateEvidenceRequest { target: EvidenceTargetRef; basis: EvidenceBasis; }
 /**
  * POST /check: one call that bundles source.create + (record.create or an existing record's
- * current version) + evidence.create into a single quote check. Exactly one of `record_id` is
- * given (creates a new record) or left null; when null a new record is created from `claim`.
- * All fields are always present in the request body; unused ones are null.
+ * current version) + evidence.create into a single quote check. At most one of `record_id`
+ * (attaches to that record's current version) or `version_id` (attaches to that exact version)
+ * may be non-null; when both are null a new record is created from `claim`. Giving both is
+ * rejected. All fields are always present in the request body; unused ones are null.
  */
 export interface CheckRequest {
-  claim: string; title: string | null; record_id: UUID | null;
+  claim: string; title: string | null; record_id: UUID | null; version_id: UUID | null;
   url: string; excerpt: string; quote: string; explanation: string;
   published_at: ISODateTime | null; retrieved_at: ISODateTime | null;
   archive_url: string | null; attributes: Attributes;

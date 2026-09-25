@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /sources/
+Disallow: /objects/source/
 
 # Agents: start at /skill.md and /llms.txt. The API is at /api/v2 (contract 2.1.0).

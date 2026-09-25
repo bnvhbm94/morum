@@ -37,7 +37,7 @@ function recordCreate(){
 const EXCERPT='City records show the bridge opened in 1932 after years of delay.';
 function body(overrides={}){
  return {
-  claim:'The bridge opened in 1932.',title:null,record_id:null,
+  claim:'The bridge opened in 1932.',title:null,record_id:null,version_id:null,
   url:'https://source.example/article',excerpt:EXCERPT,
   quote:'the bridge opened in 1930',explanation:'Direct statement of the opening year.', // deliberately wrong year: not_found by default
   published_at:null,retrieved_at:null,archive_url:null,attributes:{},
@@ -58,7 +58,7 @@ test('creates a new record, source and evidence in one call',async()=>{
  assert.equal(data.quote_check.state,'not_found'); // exact-case mismatch against the excerpt above
  const recordCall=s.calls.find(c=>c.name==='kb_create_record');
  assert.equal(recordCall.args.p_command.body_text,'The bridge opened in 1932.');
- assert.equal(recordCall.args.p_command.title,'The bridge opened in 1932.'.slice(0,120));
+ assert.equal(recordCall.args.p_command.title,null); // no title given: never fabricated from the claim
  const sourceCall=s.calls.find(c=>c.name==='kb_create_source');
  assert.equal(sourceCall.args.p_command.url,body().url);
  assert.equal(sourceCall.args.p_command.submitted_text,body().excerpt);
@@ -139,6 +139,73 @@ test('an excerpt over the source submitted_text limit is rejected',async()=>{
  const s=setup(stubs());
  const r=await s.handle(s.req('/check','POST',body({excerpt:'a'.repeat(8001)}),anon));
  assert.equal(r.status,422);
+});
+
+test('an existing version_id targets that exact version and does not create a record',async()=>{
+ const recordId=randomUUID(),versionId=randomUUID();
+ const s=setup({...stubs(),kb_get_version:()=>({
+  version:{id:versionId,record_id:recordId,version_no:2,parent_version_id:null,title:'Existing',body_text:'x',
+   body_format:'plain_text',body_sha256:'a'.repeat(64),attributes:{},synthetic_demo:false,reason:'r',
+   created_by:null,created_at:new Date().toISOString(),visibility:'public'},
+  author:null,is_current:false,current_version_id:randomUUID(),basis:[],review_summary:null,correction_refs:[],
+  related_counts:{annotations:0,relations:0,reviews:0},links:{record:'',version:'',history:'',raw:''},
+ })});
+ const r=await s.handle(s.req('/check','POST',body({version_id:versionId}),anon));
+ assert.equal(r.status,201);
+ const data=(await r.json()).data;
+ assert.equal(data.record_id,recordId);assert.equal(data.version_id,versionId);
+ assert.deepEqual(data.created,{record:false,source:true,evidence:true});
+ assert(!s.calls.some(c=>c.name==='kb_create_record'));
+});
+
+test('both record_id and version_id set is rejected',async()=>{
+ const s=setup(stubs());
+ const r=await s.handle(s.req('/check','POST',body({record_id:randomUUID(),version_id:randomUUID()}),anon));
+ assert.equal(r.status,422);
+ assert(!s.calls.some(c=>c.name==='kb_create_record'||c.name==='kb_create_source'));
+});
+
+test('a quote longer than the excerpt is rejected',async()=>{
+ const s=setup(stubs());
+ const r=await s.handle(s.req('/check','POST',body({excerpt:'short excerpt',quote:'this quote is much longer than the excerpt text above'}),anon));
+ assert.equal(r.status,422);
+ assert(!s.calls.some(c=>c.name==='kb_create_source'));
+});
+
+test('a source with byte-identical submitted_text at the same url is reused, not duplicated',async()=>{
+ const existingId=randomUUID();
+ const s=setup({...stubs(),
+  kb_url_report:()=>({url:body().url,canonical_url:null,
+   sources:[{id:existingId,url:body().url,title:null,published_at:null,retrieved_at:null,has_text:true,created_by:null,created_at:new Date().toISOString(),review_summary:null}],
+   citations:[],corrections:[],counts:{sources:1,citations:0,corrections:0}}),
+  kb_get_source:()=>({id:existingId,url:body().url,title:null,submitted_text:EXCERPT,
+   published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:false,
+   created_by:null,created_at:new Date().toISOString(),visibility:'public'}),
+ });
+ const r=await s.handle(s.req('/check','POST',body(),anon));
+ assert.equal(r.status,201);
+ const data=(await r.json()).data;
+ assert.equal(data.source_id,existingId);
+ assert.equal(data.created.source,false);
+ assert(!s.calls.some(c=>c.name==='kb_create_source'));
+});
+
+test('a source at the same url with different submitted_text is not reused',async()=>{
+ const existingId=randomUUID();
+ const s=setup({...stubs(),
+  kb_url_report:()=>({url:body().url,canonical_url:null,
+   sources:[{id:existingId,url:body().url,title:null,published_at:null,retrieved_at:null,has_text:true,created_by:null,created_at:new Date().toISOString(),review_summary:null}],
+   citations:[],corrections:[],counts:{sources:1,citations:0,corrections:0}}),
+  kb_get_source:()=>({id:existingId,url:body().url,title:null,submitted_text:'A completely different excerpt entirely.',
+   published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:false,
+   created_by:null,created_at:new Date().toISOString(),visibility:'public'}),
+ });
+ const r=await s.handle(s.req('/check','POST',body(),anon));
+ assert.equal(r.status,201);
+ const data=(await r.json()).data;
+ assert.notEqual(data.source_id,existingId);
+ assert.equal(data.created.source,true);
+ assert(s.calls.some(c=>c.name==='kb_create_source'));
 });
 
 test('Morum-Agent is passed through to every sub-command as declared provenance',async()=>{

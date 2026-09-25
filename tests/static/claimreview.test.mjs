@@ -13,18 +13,16 @@ const claimreview = read('src/server/service/claimreview.ts');
 const surfaces = read('src/server/service/handlers/surfaces.ts');
 const skill = read('public/skill.md');
 
-test('the version page renders a server-side application/ld+json script tag', () => {
- assert.match(page, /<script type="application\/ld\+json"/);
+test('the version page does not embed an application/ld+json script tag', () => {
+ // Google's ClaimReview eligibility requires the reviewed claim to be attributed to a separate
+ // source and one ClaimReview per page; our pages review our own anonymous records, so inline
+ // markup here would not qualify. JSON-LD embedding was removed 2026-09-25; claim_reviews
+ // remains available from the /api/v2/dossier JSON API instead (see surfaces.ts test below).
+ assert.doesNotMatch(page, /<script type="application\/ld\+json"/);
+ assert.doesNotMatch(page, /claimReviewScript/);
 });
 
-test('the version page derives claim reviews from the server service, not an HTTP call to itself', () => {
- assert.match(page, /from '\.\.\/\.\.\/\.\.\/server\/service\/claimreview'/);
- assert.match(page, /createServices\(\)/);
- assert.doesNotMatch(page, /fetch\(/);
-});
-
-test('the ld+json payload is escaped for </script> before being injected', () => {
- assert.match(page, /claimReviewScript\(/);
+test('the ld+json payload the dossier API can still emit is escaped for </script> before injection', () => {
  assert.match(claimreview, /replace\(\/</);
  assert.match(claimreview, /\\\\u003c/);
 });
