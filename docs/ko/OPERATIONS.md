@@ -18,6 +18,24 @@
 - 키 취급: 사용자의 `~/.zshrc`에 `export MORUM_OPERATOR_KEY=…`로 있다. Claude 세션은 프로필을 한 번만 읽으므로 `zsh -c 'source ~/.zshrc >/dev/null 2>&1; node scripts/moderate.mjs …'` 형태로 실행한다. **값을 출력하거나 채팅에 붙여넣지 않는다.** 존재 확인은 `[ -n "$MORUM_OPERATOR_KEY" ]`만. 채팅에 키가 노출되면 그 키는 버리고 새로 만든다.
 - 비밀값을 다루는 명령(`vercel env add`, `keygen`, `enroll`)은 Claude 채팅의 Run 버튼이 아니라 별도 터미널 앱에서 실행한다(출력이 세션에 전달되기 때문).
 
+## 백업
+- `.github/workflows/backup.yml`이 매일 18:00 UTC(03:00 KST)와 수동 실행 시 돈다. 운영 DB를 `pg_dump`하고, Supabase 내부 스키마(`auth`, `storage`, `realtime`, `supabase_functions`, `extensions`, `graphql*`, `pgsodium*`, `vault`, `net`, `_realtime`)는 제외해 `public`과 `knowledge`만 남긴 뒤, `gpg`(AES256, symmetric)로 암호화해서 워크플로 아티팩트로 올린다(보관 90일). 저장소가 public이라 아티팩트는 읽기 권한만 있으면 누구나 내려받을 수 있으므로 암호화는 선택이 아니다.
+- 설정할 시크릿 두 개(저장소 Settings > Secrets and variables > Actions): `SUPABASE_DB_URL`(Supabase 대시보드 → Connect → Session pooler URI, 비밀번호 포함), `BACKUP_PASSPHRASE`(강한 임의의 문구; GitHub 밖의 안전한 곳, 예: 비밀번호 관리자에 보관 — 이걸 잃으면 모든 백업이 복구 불가능해진다).
+- 복원: `.dump.gpg` 아티팩트를 내려받은 뒤
+  ```
+  gpg -d morum-YYYY-MM-DD.dump.gpg | pg_restore --dbname="$TARGET_DB_URL" --no-owner --clean --if-exists
+  ```
+- 수동 로컬 덤프(GitHub Actions 없이): `supabase db dump`는 Docker가 필요한데 소유자 컴퓨터에는 설치돼 있지 않으므로 `pg_dump`를 직접 쓴다.
+  ```
+  pg_dump "$MORUM_DB_URL" --no-owner --no-privileges --format=custom \
+    --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime \
+    --exclude-schema=supabase_functions --exclude-schema=extensions \
+    --exclude-schema='graphql*' --exclude-schema='pgsodium*' \
+    --exclude-schema=vault --exclude-schema=net --exclude-schema=_realtime \
+    --file=morum.dump
+  gpg --symmetric --cipher-algo AES256 -o morum-$(date -u +%F).dump.gpg morum.dump && shred -u morum.dump
+  ```
+
 ## 기여 에이전트 운용에서 배운 것
 - 프로토콜은 `scratchpad/contrib-protocol.md`(저장소 밖)에 있다. 핵심: 문서당 **고정** Idempotency-Key(재시도에 재사용), 등록 전 같은 제목 검색, 실제로 읽은 출처만, quote는 출처에 있는 문장만, anchor는 서버가 돌려준 `body_text`로 코드포인트 계산, 확인 날짜는 본문이 아니라 `attributes.retrieved_at`.
 - 2026-09-23 첫 실행(Haiku 5개, 주제 5개)에서 생긴 문제와 처리: 같은 문서 이중 등록 10편 → 각 중복 기록에 새 버전을 올려 본문을 "중복 저장본" 안내로 바꾸고 `attributes.duplicate_of`에 원본 record id 기록(탐색기가 숨김) → 이후 운영자 권한으로 `hidden` 처리. 근거 없는 관계 6건 → 관계 객체에 `disagree`(focus `evidence_support`) 검토를 남김. anchor 누락 → 같은 에이전트를 재개해 채움.

@@ -1,0 +1,95 @@
+name: Backup
+
+# Supabase free tier has no automatic backups. This is the only backup of
+# production data. Runs daily plus on-demand.
+on:
+  schedule:
+    - cron: '0 18 * * *' # 18:00 UTC = 03:00 KST
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set. Add it in repo Settings > Secrets and variables > Actions (Supabase dashboard > Connect > Session pooler URI, with password)." >&2
+            exit 1
+          fi
+          if [ -z "${{ secrets.BACKUP_PASSPHRASE }}" ]; then
+            echo "::error::BACKUP_PASSPHRASE secret is not set. Add it in repo Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+
+      - name: Install PostgreSQL 17 client (PGDG)
+        # The Supabase project runs Postgres 15 or 17 depending on when it was
+        # provisioned. pg_dump must be >= the server's major version, so we
+        # install the PGDG apt repo (Ubuntu's default repo only ships one
+        # major version) and take postgresql-client-17 to be safe.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump production database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # Dump everything except Supabase-internal schemas. Product data
+          # lives in `public` and `knowledge` (see
+          # supabase/migrations/202609200101_core.sql), but excluding the
+          # known internal schemas instead of listing product schemas by
+          # name is safer against future product schemas being added.
+          pg_dump "$SUPABASE_DB_URL" \
+            --no-owner \
+            --no-privileges \
+            --format=custom \
+            --exclude-schema=auth \
+            --exclude-schema=storage \
+            --exclude-schema=realtime \
+            --exclude-schema=supabase_functions \
+            --exclude-schema=extensions \
+            --exclude-schema='graphql*' \
+            --exclude-schema='pgsodium*' \
+            --exclude-schema=vault \
+            --exclude-schema=net \
+            --exclude-schema=_realtime \
+            --file=morum.dump
+
+      - name: Encrypt dump
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          # This repository is PUBLIC, so workflow artifacts are downloadable
+          # by anyone with read access to it. The dump must never be stored
+          # unencrypted as an artifact.
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            -o "morum-$(date -u +%F).dump.gpg" morum.dump
+          shred -u morum.dump
+
+      - name: Report encrypted file size
+        run: |
+          {
+            echo "### Backup"
+            echo "File: morum-$(date -u +%F).dump.gpg"
+            echo "Size: $(du -h morum-$(date -u +%F).dump.gpg | cut -f1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: morum-backup-${{ github.run_id }}
+          path: morum-*.dump.gpg
+          retention-days: 90
+          if-no-files-found: error
