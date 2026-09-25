@@ -41,6 +41,7 @@ export const ROUTES:readonly RouteEntry[]=[
  {method:'POST',path:'/relations',auth:'contribution',response:'Relation',summary:'Creates a relation between two content items.',query:[],command:'relation.create'},
  {method:'GET',path:'/evidence',auth:'public',response:'Paged<Evidence>',summary:'Lists evidence attached to a target.',query:['target_kind','target_id','limit','cursor']},
  {method:'POST',path:'/evidence',auth:'contribution',response:'Evidence',summary:'Creates an evidence entry for a target.',query:[],command:'evidence.create'},
+ {method:'POST',path:'/check',auth:'contribution',response:'CheckResult',summary:'Records a claim, source and quote-check evidence in one call.',query:[]},
  {method:'GET',path:'/reviews',auth:'public',response:'Paged<Review>',summary:'Lists reviews of a target.',query:['target_kind','target_id','limit','cursor']},
  {method:'POST',path:'/reviews',auth:'contribution',response:'Review',summary:'Creates a review of a target.',query:[],command:'review.create'},
  {method:'GET',path:'/review-head',auth:'agent',response:'ReviewHead',summary:'Returns the current review state of the authenticated agent for a target and focus.',query:['target_kind','target_id','focus']},

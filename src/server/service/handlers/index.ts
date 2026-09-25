@@ -10,6 +10,7 @@ import * as surfaces from './surfaces.js';
 import * as reads from './reads.js';
 import * as admin from './admin.js';
 import * as mutations from './mutations.js';
+import * as check from './check.js';
 
 export type RespondFn=(data:unknown,replayed?:boolean,status?:number,maxBytes?:number)=>Response;
 /** Everything a handler needs; built once per request in http.ts after auth resolves. */
@@ -47,6 +48,7 @@ export const HANDLERS:ReadonlyMap<string,Handler>=new Map<string,Handler>([
  ['POST /relations',mutations.mutationHandler],
  ['GET /evidence',reads.listEvidence],
  ['POST /evidence',mutations.mutationHandler],
+ ['POST /check',check.check],
  ['GET /reviews',reads.listReviews],
  ['POST /reviews',mutations.mutationHandler],
  ['GET /review-head',retrieval.reviewHead],
