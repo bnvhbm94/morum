@@ -47,8 +47,9 @@ test('the catalog carries every required link relation and target of roadmap 1.6
  assert.match(route,/\$\{origin\}\/api\/v2\/capabilities`/);
 });
 
-test('the route notes that openapi.json is added here once roadmap 1.6 OpenAPI (D10) lands',()=>{
- assert.match(route,/openapi\.json is added here once roadmap 1\.6/);
+test('the service-desc linkset entry lists both the route inventory and the OpenAPI document',()=>{
+ assert.match(route,/\$\{origin\}\/agent\/api-routes\.json`,type:'application\/json'/);
+ assert.match(route,/\$\{origin\}\/openapi\.json`,type:'application\/vnd\.oai\.openapi\+json'/);
 });
 
 test('the route resolves origin with the shared *.vercel.app collapse, not its own copy',()=>{

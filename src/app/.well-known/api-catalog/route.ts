@@ -1,8 +1,9 @@
 import {publicOrigin} from '../../../server/service/claimreview';
 
 /**
- * GET/HEAD /.well-known/api-catalog — RFC 9727 API catalog (roadmap 1.6; the OpenAPI half of
- * 1.6 waits on owner decision D10 and is not part of this route).
+ * GET/HEAD /.well-known/api-catalog — RFC 9727 API catalog (roadmap 1.6, including the OpenAPI
+ * half: D10 resolved as "decline zod", so public/openapi.json is hand-generated from ROUTES by
+ * scripts/generate-service-contracts.mjs, not by zod-to-openapi).
  * https://www.rfc-editor.org/rfc/rfc9727.html
  *
  * One linkset entry anchored at the API root (RFC 9727 section 2's `application/linkset+json`
@@ -33,8 +34,8 @@ function buildCatalog(origin:string):LinksetDocument{
    {
     anchor:`${origin}/api/v2/`,
     'service-desc':[
-     // openapi.json is added here once roadmap 1.6's OpenAPI half lands (owner decision D10).
      {href:`${origin}/agent/api-routes.json`,type:'application/json'},
+     {href:`${origin}/openapi.json`,type:'application/vnd.oai.openapi+json'},
     ],
     'service-doc':[
      {href:`${origin}/skill.md`,type:'text/markdown'},

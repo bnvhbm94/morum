@@ -50,7 +50,7 @@
 | 1.3 ✅ | `.gitignore` 정리 | `MY THOUGHT/`, `.DS_Store`, `.claude/`, `next-env.d.ts` 제외; `git status` 깨끗 | 계획 세션 직접 | 없음 |
 | 1.4 ✅ | 테스트의 하드코딩 제거 + 마이그레이션 해시 고정 | 마이그레이션 목록·개수·태그·RPC 개수를 파일에서 도출(`readdirSync`); 커밋된 마이그레이션 파일의 sha256을 `supabase/migrations/.hashes.json`에 기록하고 변경되면 CI 실패(graphile-migrate식) | Sonnet 1명 | 없음 |
 | 1.5 ✅ | 경로 등록표 | `ROUTES` 튜플을 항목 객체(method, path, auth, handler, query/body 스키마, response type, cost)로; `http.ts`의 if 사슬을 등록표 순회로; 동작 변화 0(service 165 통과) | Sonnet 1명, 계획 세션 설계 | **D10**(스키마를 zod로 쓸지) |
-| 1.6 | OpenAPI 3.1 + api-catalog | 등록표에서 `public/openapi.json` 생성(`api-routes.json`과 같은 스크립트), 정적 테스트로 일치 검사, `/.well-known/api-catalog`(RFC 9727 linkset) 추가, `llms.txt`와 API 루트에서 링크 | 1.5 뒤 Sonnet 1명 | 없음 |
+| 1.6 ✅ | OpenAPI 3.1 + api-catalog | 등록표(`routes.ts`)·`validation.ts`의 명령별 허용 필드·`CHECK_FIELDS`에서 `public/openapi.json` 생성(`scripts/lib/openapi.mjs`, `api-routes.json`과 같은 스크립트가 호출); 정적 테스트(`tests/static/openapi.test.mjs`)로 41개 라우트 전수 일치 검사; `/.well-known/api-catalog` linkset의 service-desc에 openapi.json 추가; `llms.txt`에 링크 | 1.5 뒤 Sonnet 1명 | D10 해소: zod 거부, 등록표에서 손수 생성(새 의존성 없음) |
 | 1.7 | `mutate` 분해 + plpgsql_check | `knowledge.mutate`를 영수증 공통부 + 연산별 `create_*_core`로; `plpgsql_check` 확장으로 CI에서 함수 정적 검사; 마이그레이션 0111 + 롤백; DB 통과 | Sonnet 1명(SQL), 로컬 DB | push(소유자) |
 | 1.8 ✅ | 문서 언어 | 코드 문서(`DB_TESTING.md`, `LOCAL_INTEGRATION.md`, `docs/CODE_MAP.md`)는 영어 원본; 구상 문서(INTENT, CONTENT_STRATEGY, ROADMAP)는 한국어 원본 + 같은 구조의 영어 번역 파일, 파일 머리에 상호 링크 | Sonnet 1명 | 없음 |
 | 1.9 ✅ | 사이트 디테일(데이터 무관) | 첫 화면 문단 없음(소개는 우주 안 Morum 항성 문서로 이동, 2026-09-24 소유자 결정), 읽기 모드에 근거별 `quote_check` 상태와 검토 계열 수, 구형 explorer·객체 페이지 정리, 폰 폭 간격; 행성 꾸미기 `attributes.appearance`(제한 팔레트의 색조·질감; 밝기·고리·흐림은 장부의 뜻으로 예약) | 설계: Opus 급에 설계 요청(팔레트·표시 규칙·문장 위치) → 소유자 선택 → 구현: Sonnet 1명 | 없음 |
@@ -166,7 +166,7 @@
 | D7 | PGroonga·임베딩 | 4주 | 4.6 수치 보고 결정; 기본 후보 PGroonga + BGE-M3 |
 | D8 | 공개 알림 장소와 시점 | 4주 | 4.8 조건 충족 뒤 |
 | D9 | 사람용 화면의 방향(우주 은유 유지 vs 확인 그래프) | 4주 초 | 실제 확인 데이터를 본 뒤 |
-| D10 | 검증 스키마에 zod 도입(새 의존성) | 1주 | 도입 권장(zod-to-openapi로 OpenAPI 생성이 가장 싸짐); 거부 시 JSON Schema 수기 |
+| D10 ✅(2026-09-25) | 검증 스키마에 zod 도입(새 의존성) | 1주 | 거부: 새 의존성 없이 `scripts/lib/openapi.mjs`가 `routes.ts`/`validation.ts` 소스 텍스트를 파싱해 JSON Schema를 직접 생성 |
 | D11 | 출처 보관 포인터 정책 | 2주 | 에이전트가 Wayback Availability → 없으면 SPN2 요청 후 `archive_url` 기록; 서버는 가져오지 않음 |
 
 ## 5. 지표 (매주 기록)
@@ -224,7 +224,10 @@
 - 2026-09-24 (저녁): 외부 AI 비평 반영. README에 "보증하지 않는 것"(신원 미검증·원문 미확보·순환 인용은 구조의 한계), "가치의 두 단계"(개인 장부 → 공유 장부, 증거는 교차 계열 재사용만), "실험 하나"(사람이 확인한 정답 발췌 기준, 시딩/비시딩, 원문 직접 열기 대조군), "검증되지 않은 가설"(의미 참조는 장기 가설로 내림) 추가. skill.md에서 의미 참조 비중 축소. 3.2 실험 재설계, 2.10 순환 인용 감지 추가.
 - 2026-09-24 (밤): 1.9 완료(6단계, 커밋 7a58355~2b071ab, 배포 morum-qi8m4dbdx): 뜻 있는 행성 배치, Morum 항성 첫 시점, 데스크톱 검색 단축키, 읽기 화면 인용 대조·검토 표, `/`가 우주·구형 페이지 리다이렉트·삭제, 폰 간격, `attributes.appearance` 팔레트. 1주 항목 전부 완료(1.6 OpenAPI·1.7만 남음).
 - 2026-09-24 (밤 2): 첫 확인 기록 4건 시딩(관찰된 범위 초과 인용 2건 + 정정 2건; `data/seeds/`). 검토 모델의 지적으로 모델 붕괴 정정 기록의 경계가 틀렸음을 본문에서 확인(10% 원본 보존 설정 존재), 인용문 기반 부분 수정으로 2판 생성. 결정: 성공 지표는 외부 운영자 수와 조회가 답을 바꾼 비율 두 개(교차 계열 재사용은 보조, 계열은 자기 신고임을 표기); 빈 조회 집계는 정규화 URL만(2.11); README에 이름의 뜻과 장기 방향 추가.
+- 2026-09-25: 1.6의 OpenAPI 절반 완료. D10을 "zod 거부"로 해소(`routes.ts`/`validation.ts` 소스 텍스트를 정규식으로 파싱해 `public/openapi.json`을 직접 생성하는 `scripts/lib/openapi.mjs` 추가; 새 npm 의존성 없음). `/.well-known/api-catalog`의 service-desc에 `openapi.json`(rel service-desc, `application/vnd.oai.openapi+json`) 추가하고 플레이스홀더 주석 제거, `llms.txt`에 링크 한 줄 추가. 새 정적 테스트 `tests/static/openapi.test.mjs`: 커밋된 문서가 등록표에서 다시 만든 문서와 바이트 단위로 일치하는지, 41개 라우트가 정확히 한 번씩 나타나는지, 모든 연산에 4XX/5XX Error 참조가 있는지, 명령/‑`/check` 요청 본문이 `additionalProperties:false`인지 확인. 1주 항목 전부 완료(1.7만 남음).
 - 2026-09-24 (밤): 카페인 기록 정정(1판 검토 3건, 2판 인용문 편집, ACOG 출처 추가, x:scope:shifted). README 개정: 첫 화면에 용도, 세 질문 분리와 실제 사례 두 개, 과장 두 곳 제거(계열 일치는 약한 신호, 기록은 제출물), 핵심 규칙 2를 현재 코드가 강제하는 범위로 축소하고 2.12로 강제 계획 추가, 현재 상태(비공개·외부 이용자 없음·키워드 검색) 명시.
 - 2026-09-25 1.9 첫 화면 문단 제거 반영(외부 검토 지적: 완료 표시가 실제와 어긋남).
 - 2026-09-25 `POST /check` 한 번 호출 진입점 배포(출처+기록+근거 묶음; 2.2의 일부).
 - 2026-09-25: 2.9 버전 페이지 HTML에서 ClaimReview `<script type="application/ld+json">` 제거(Google 적격성: 검토 대상 주장이 별도 출처에 귀속되어야 하고 페이지당 ClaimReview 하나여야 하는데, 우리는 우리 자신의 익명 기록을 검토함). `/dossier` JSON API의 `claim_reviews`는 변경 없음.
+
+- 2026-09-25: 1.7 파트 A(정본 함수 파일) 완료: `supabase/functions/{kb_dossier,kb_health,validate_command,mutate}.sql`가 각각 하나의 현재 정의를 보유(kb_dossier는 0114, validate_command는 0116, mutate는 0112에서, kb_health는 `{{MIGRATION_TAG}}` 자리표시자 포함); `tests/static/canonical-functions.test.mjs`가 각 정본 파일을 그 함수를 마지막으로 정의한 마이그레이션에 고정; `scripts/new-function-migration.mjs`가 정본 파일에서 다음 마이그레이션+롤백 쌍을 생성(격리된 스크래치 git 저장소에서 종단 검증 완료); CONTRIBUTING.md "데이터베이스 함수 변경하기"에 문서화. 파트 B(`knowledge.mutate`를 연산별 `create_*_core`로 분해)는 이번에 시도하지 않음 -- 이유는 세션 기록 참고.
