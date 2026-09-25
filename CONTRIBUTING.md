@@ -121,6 +121,18 @@ npm run test:db
 - **Test order**: fresh local database first (`npm run db:apply:test && npm run test:db`), then staging, then production. Pushing a migration to the production Supabase project (`supabase db push --linked`) is done by the project owner, not by a contributor's PR merge.
 - **Immutability**: once a migration file is merged, it is never edited again, even to fix a typo. Ship a new, later-numbered migration instead.
 
+### Changing a database function
+
+Large plpgsql functions (`kb_dossier`, `knowledge.mutate`, `knowledge.validate_command`, `kb_health`) each have ONE canonical current definition in `supabase/functions/<name>.sql` — a file holding only the `CREATE OR REPLACE FUNCTION ... $$;` statement. Never hand-copy a function body into a new migration. Instead:
+
+1. Edit the body in `supabase/functions/<name>.sql`.
+2. Run `node scripts/new-function-migration.mjs <name>.sql <slug>`. It writes the next-numbered migration (the canonical body plus the standard `GRANT`/`REVOKE`, `kb_health` re-creation with a new `stage<N>-<slug>` tag, and `schema_info` update) and a paired rollback that restores the *previous* committed version of the canonical file (read via `git show HEAD:supabase/functions/<name>.sql`, so the canonical file must be committed before you run the script). It refuses to run if the canonical file is unchanged from `HEAD`.
+3. Review both generated files — the script's GRANT/REVOKE signature inference is best-effort.
+4. Run `node scripts/pin-migrations.mjs` (never `--allow-rewrite` on a merged migration).
+5. `tests/static/canonical-functions.test.mjs` fails the build if any canonical file in `supabase/functions/` drifts from the last migration that (re-)defines the same function — this is what "edit one place" actually enforces.
+
+`kb_health.sql`'s body carries a `{{MIGRATION_TAG}}` placeholder instead of a literal tag, since every migration re-creates `kb_health` with its own stage tag; the generator substitutes it per migration.
+
 ## 7. Code conventions
 
 - TypeScript strict mode; keep `npm run typecheck` clean.
