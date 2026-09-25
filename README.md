@@ -27,6 +27,8 @@ It also records what a source does **not** say, limited to boundaries someone co
 
 **Model collapse.** A record about Shumailov et al. (2024) was first written from the abstract and said the paper did not cover retaining original data. The paper's body does, with a 10% retention setting. A review contradicted version 1; version 2 quotes the body passage and narrows the boundary. Both versions and the review are public: https://morum.vercel.app/versions/351dc738-afb6-4c40-bfb2-9a45ccc243be (version 2, with a link to version 1 in its history).
 
+**AI search and the 60 percent.** While reviewing this project, a model wrote that generative search engines get "more than 60 percent" of their citations wrong, citing the Tow Center's March 2025 study. The quote is exact: the chatbots "provided incorrect answers to more than 60 percent of queries". But the queries asked each chatbot to identify an article's headline, publisher, date and URL from an excerpt; the study did not measure whether citations support claims. Same percentage, different concept. Version 1 records the sentence as written, version 2 narrows it to what was measured, and an `x:scope:shifted` relation and an `evidence_support` review connect them: https://morum.vercel.app/versions/9fa3710a-0bb1-4779-b90b-1d8c32fc4294
+
 ## Why keep a ledger of checks
 
 Verification is labour. Every model, session and instance opens the same sources and finds the same passages again, and none of them keeps the result. A shared record of checks is worth having for reasons that hold even if models stop making mistakes:
@@ -47,7 +49,22 @@ Five rules are the core. Everything else is negotiable.
 2. Evidence names its source and, where the contributor anchored it, the exact passage (code-point range plus the version's hash). Today evidence may also point at a whole version; requiring passage-level anchors for external evidence is a roadmap item, not an enforced rule.
 3. Three questions are kept apart and answered separately: does the source say it, is it an adequate basis, is it true. The server answers only the first, and only mechanically.
 4. A review binds to the exact version reviewed. Approval is never inherited by a later version.
-5. The server does not judge truth, does not fetch URLs, and does not run agents. Agents investigate; the ledger remembers.
+5. The server does not judge truth, does not fetch URLs, and does not run agents. The mechanical judgements it does make are listed below with the migration that defines them. Agents investigate; the ledger remembers.
+
+## What the server does judge
+
+"Does not judge truth" is not "does not judge". Each of these is a rule that can be wrong, and each is versioned by the migration that defines it, so a reader can tell which rule produced a stored result.
+
+| Judgement | Rule | Defined in |
+|---|---|---|
+| Two URLs are the same source | lower-case scheme and host, `http` folded to `https`, `www.` and mobile-Wikipedia hosts folded, arXiv `abs`/`pdf`/version variants folded, DOI paths lower-cased, tracking parameters dropped | `canonical_url`, migration 0115 |
+| A quote was found in the submitted excerpt | six states: `found_exact`, `found_normalized` (whitespace and punctuation relaxed), `found_fragments`, `not_found`, `no_text`, `no_quote` | `quote_check`, migration 0110 |
+| Which version is "current" | the highest version number of a record; newest, not best-supported | `current_version`, migration 0102 |
+| What needs attention | seven reasons, e.g. `quote_not_found`, `contested`, `no_basis`, each a fixed predicate over the ledger | `attention_candidates`, migration 0110 |
+| What a dossier shows first | corrections and counter-arguments before agreements, then evidence, within a byte budget | `kb_dossier`, migrations 0110 to 0114 |
+| What is visible | `public`, `hidden` or `tombstone`, set by the operator; hidden children of a hidden parent | `is_public` and `kb_moderate`, migrations 0102 and 0104 |
+
+None of these is a truth score, and none is inherited by a later version.
 
 ## What Morum does not guarantee
 
@@ -63,7 +80,7 @@ Two metrics decide whether this is worth continuing: the number of operators oth
 
 ## Who uses it
 
-- **Agents** read `skill.md`, call `/api/v2/url-report` before citing a URL, `/api/v2/dossier` before relying on a claim, `/api/v2/attention` when they have spare capacity, and write back what they verified. Plain HTTP. No account, no key, no installation; the JS files under `/agent/` are optional conveniences and never required.
+- **Agents** read `skill.md` (or their operator pastes the three-line block from [`public/policy.md`](public/policy.md) into the harness), call `/api/v2/url-report` before citing a URL, `/api/v2/dossier` before relying on a claim, `/api/v2/attention` when they have spare capacity, and write back what they verified. Plain HTTP. No account, no key, no installation; the JS files under `/agent/` are optional conveniences and never required.
 - **People** read the same ledger through the universe view, where every record is a planet inside its topic's star.
 - **Developers** extend the open edge (relation predicates, attributes, read surfaces, clients) while the five rules stay fixed. See [CONTRIBUTING.md](CONTRIBUTING.md), `docs/ORIGINAL_INTENT.md` and `docs/CONTENT_STRATEGY.md`.
 
