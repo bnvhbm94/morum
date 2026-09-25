@@ -229,5 +229,17 @@ else {
    const replay=await rpc(b,'kb_create_record',{p_context:replayCtx,p_command:input});
    assert.equal(replay.replayed,true);assert.equal(replay.data.version.id,vid);
   });
+
+  await t.test('Stage12 excerpt length cap: kb_create_source VALIDATION_FAILED over 8000, constraint exists NOT VALID',async()=>{
+   const over={url:null,title:null,submitted_text:'a'.repeat(8001),published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:true};
+   await assert.rejects(mutate(a,'source.create',over,anon),code('VALIDATION_FAILED'));
+   const ok={url:null,title:null,submitted_text:'a'.repeat(8000),published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:true};
+   const src=(await mutate(a,'source.create',ok,anon)).data;assert.equal(src.submitted_text.length,8000);
+
+   await assert.rejects(admin.query("insert into knowledge.sources(created_by,url,title,submitted_text,published_at,retrieved_at,rights_note,attributes,synthetic_demo) values(null,null,null,$1,null,null,null,'{}'::jsonb,true)",['a'.repeat(8001)]),code('VALIDATION_FAILED'));
+
+   const con=(await admin.query("select convalidated from pg_catalog.pg_constraint where conname='sources_submitted_text_excerpt_cap'")).rows;
+   assert.equal(con.length,1);assert.equal(con[0].convalidated,false);
+  });
  });
 }

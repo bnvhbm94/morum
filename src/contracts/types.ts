@@ -66,7 +66,7 @@ export interface EvidenceCommon {
 }
 export interface SourceInput {
   url: string | null; title: string | null;
-  submitted_text: string | null; // Supplied text; server does not fetch arbitrary URLs.
+  submitted_text: string | null; // Excerpt, at most 8,000 code points; the passage plus its surrounding context, never a whole article. Server does not fetch arbitrary URLs.
   published_at: ISODateTime | null; retrieved_at: ISODateTime | null;
   rights_note: string | null; attributes: Attributes; synthetic_demo: boolean;
 }
@@ -197,6 +197,23 @@ export interface ObjectView {
   owner_version_id: UUID | null; basis: Evidence[]; basis_truncated?: boolean;
 }
 export interface CreateEvidenceRequest { target: EvidenceTargetRef; basis: EvidenceBasis; }
+/**
+ * POST /check: one call that bundles source.create + (record.create or an existing record's
+ * current version) + evidence.create into a single quote check. Exactly one of `record_id` is
+ * given (creates a new record) or left null; when null a new record is created from `claim`.
+ * All fields are always present in the request body; unused ones are null.
+ */
+export interface CheckRequest {
+  claim: string; title: string | null; record_id: UUID | null;
+  url: string; excerpt: string; quote: string; explanation: string;
+  published_at: ISODateTime | null; retrieved_at: ISODateTime | null;
+  archive_url: string | null; attributes: Attributes;
+}
+export interface CheckResult {
+  record_id: UUID; version_id: UUID; source_id: UUID; evidence_id: UUID;
+  quote_check: QuoteCheck;
+  created: { record: boolean; source: boolean; evidence: boolean };
+}
 export interface KeyRevoked { agent_id: UUID; key_id: UUID; revoked_at: ISODateTime; }
 export interface AgentStatus { active_key_id: UUID | null; agent: ActorPublic; }
 export type SearchScope = "current" | "all_versions";

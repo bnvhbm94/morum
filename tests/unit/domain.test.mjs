@@ -30,6 +30,11 @@ test('source CRLF is preserved; URL is data, no fetch is performed',()=>{
  const before=JSON.stringify(x);validateCommand('source.create',x);assert.equal(JSON.stringify(x),before);
  for(const url of ['file:///etc/passwd','javascript:alert(1)','https://user:pass@example.invalid/'])bad(()=>validateCommand('source.create',{...x,url}));
 });
+test('submitted_text excerpt cap: 8000 code points passes, 8001 fails',()=>{
+ const x={url:'http://127.0.0.1/private',title:null,submitted_text:'a'.repeat(8000),published_at:null,retrieved_at:null,rights_note:null,attributes:{},synthetic_demo:true};
+ assert.doesNotThrow(()=>validateCommand('source.create',x));
+ bad(()=>validateCommand('source.create',{...x,submitted_text:'a'.repeat(8001)}));
+});
 test('review IDs are exact; review-of-review not in the contract',()=>{
  const input={target:{kind:'review',id:f.version.id},stance:'agree',focus:'content',explanation:'Synthetic',previous_review_id:null,basis:[]};bad(()=>validateCommand('review.create',input));
  assert.doesNotThrow(()=>validateCommand('review.create',{...input,target:{kind:'evidence',id:f.version.id}}));

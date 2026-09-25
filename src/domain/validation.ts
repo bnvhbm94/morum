@@ -16,8 +16,8 @@ export function text(v:unknown,max:number,min=1,nullable=false):void {
  if(v===null&&nullable)return;const s=validateScalar(v);ensure(cpLength(s)<=max&&cpLength(s)>=min&&(min===0||s.trim().length>0));
 }
 function one(v:unknown,values:readonly unknown[]):void {ensure(values.includes(v));}
-function nilUuid(v:unknown):void {if(v!==null)uuid(v);}
-function date(v:unknown):void {
+export function nilUuid(v:unknown):void {if(v!==null)uuid(v);}
+export function date(v:unknown):void {
  if(v===null)return;
  ensure(typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(v)&&Number.isFinite(Date.parse(v)));
  const y=Number(v.slice(0,4)),m=Number(v.slice(5,7)),d=Number(v.slice(8,10));
@@ -106,7 +106,7 @@ export function validateCommand(op:MutationName,value:unknown):void {
  case 'source.create':
   if(o.url!==null){text(o.url,2048);let url:URL;try{url=new URL(o.url as string);}catch{fail('VALIDATION_FAILED');}
    ensure(!/\s/.test(o.url as string)&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!!url.hostname&&/^https?:\/\//i.test(o.url as string));}
-  text(o.title,240,1,true);if(o.submitted_text!==null){validateScalar(o.submitted_text);ensure(cpLength(o.submitted_text as string)<=100000);}
+  text(o.title,240,1,true);if(o.submitted_text!==null){validateScalar(o.submitted_text);ensure(cpLength(o.submitted_text as string)<=8000);}
   ensure(o.url!==null||(typeof o.submitted_text==='string'&&o.submitted_text.trim().length>0));date(o.published_at);date(o.retrieved_at);text(o.rights_note,8000,1,true);attributes(o.attributes);one(o.synthetic_demo,[true,false]);break;
  case 'relation.create':
   ref(o.from);ref(o.to);ensure((o.from as Dict).kind!==(o.to as Dict).kind||String((o.from as Dict).id).toLowerCase()!==String((o.to as Dict).id).toLowerCase());text(o.predicate,100);
@@ -124,3 +124,14 @@ export function validateListQuery(value:unknown,extra:readonly string[]=[]):Dict
  if(o.cursor!==undefined&&o.cursor!==null)text(o.cursor,4096);return o;
 }
 export function parseQueryInteger(value:string):number {ensure(/^(0|[1-9][0-9]*)$/.test(value));const n=Number(value);integer(n);return n;}
+/** POST /check body: shape + scalar checks only; the three bundled sub-commands are re-validated
+ * with validateCommand by the handler once they are assembled, so limits (e.g. excerpt/submitted_text)
+ * stay defined in exactly one place (the source.create case above). */
+const CHECK_FIELDS=['claim','title','record_id','url','excerpt','quote','explanation','published_at','retrieved_at','archive_url','attributes'] as const;
+export function validateCheckRequest(value:unknown):T.CheckRequest {
+ const o=object(value,CHECK_FIELDS,CHECK_FIELDS);
+ text(o.claim,4000,1);text(o.title,240,1,true);nilUuid(o.record_id);
+ text(o.url,2048,1);text(o.excerpt,8000,1);text(o.quote,10000,1);text(o.explanation,8000,1);
+ date(o.published_at);date(o.retrieved_at);text(o.archive_url,2048,1,true);attributes(o.attributes);
+ return o as unknown as T.CheckRequest;
+}

@@ -14,7 +14,7 @@ Use of the data to train, evaluate, fine-tune or ground machine-learning models,
 
 ## What contributing means
 
-By writing to the API, a contributor (person or agent, keyed or anonymous) dedicates the submitted content to the public domain under CC0 to the extent they hold rights in it, and confirms they may do so. Quoted excerpts from third-party sources (`submitted_text`, `quote`) remain the property of their authors and are held as short quotations for verification; Morum does not claim to relicense them.
+By writing to the API, a contributor (person or agent, keyed or anonymous) dedicates the submitted content to the public domain under CC0 to the extent they hold rights in it, and confirms they may do so. Quoted excerpts from third-party sources (`submitted_text`, `quote`) remain the property of their authors and are held as short quotations for verification, capped at 8,000 code points per source excerpt; Morum does not claim to relicense them.
 
 ## Exceptions
 
