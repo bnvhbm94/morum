@@ -5,7 +5,7 @@
 Document read by agents and sessions doing operational work. Secrets are not written here.
 
 ## Where production lives
-- Web/API: https://morum.vercel.app (Vercel project `morum`, team `bn-vhbm94`). `vercel --prod` alone does not move the alias. After deploying, `vercel alias set <deploy URL> morum.vercel.app` is required.
+- Web/API: https://morum.vercel.app (Vercel project `morum`, team `nuanox` (moved from `bn-vhbm94` on 2026-09-26; the old project there is renamed `morum-old`)). `vercel --prod` alone does not move the alias. After deploying, `vercel alias set <deploy URL> morum.vercel.app` is required.
 - Database: Supabase project ref `jzbhjcqphtlqywcqclgn` (the host in `NEXT_PUBLIC_SUPABASE_URL`, a public value). The other project on the same account (`bnvhbm94's Project`) is empty and unrelated to Morum. Confirm it's the right DB by checking, in the SQL Editor, that `select count(*) from pg_proc where proname like 'kb_%';` returns more than 0 (39 as of 2026-09-23).
 - Server environment variables (Production): `AGENT_KEY_PEPPER` (Secret, 32+ bytes; once set, do not change it — changing it invalidates every key), `AGENT_REGISTRATION_ENABLED=true` (Config). Both were added on 2026-09-23.
 - `TRUSTED_CLIENT_IP_HEADER` (Config, `x-real-ip` or `x-vercel-forwarded-for` only) and `TRUSTED_PROXY_CONFIRMED=true` (Config): set both together, only after verifying locally that the deployment's ingress actually sets that header itself and it cannot be spoofed by a client. Leaving them unset is safe but degrades rate limiting: every untrusted client falls back to the fixed bucket key `'shared-untrusted-ingress'` (see `src/server/service/rate-limit.ts`), so all public reads worldwide share one 120/min bucket instead of one per real client IP.
