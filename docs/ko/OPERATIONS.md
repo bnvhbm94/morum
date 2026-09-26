@@ -5,7 +5,7 @@
 에이전트·세션이 운영 작업을 할 때 읽는 문서. 비밀값은 여기에 적지 않는다.
 
 ## 어디가 운영인가
-- 웹/API: https://morum.vercel.app (Vercel 프로젝트 `morum`, 팀 `bn-vhbm94`). `vercel --prod`만으로는 alias가 안 옮겨간다. 배포 후 `vercel alias set <배포 URL> morum.vercel.app`이 필요하다.
+- 웹/API: https://morum.vercel.app (Vercel 프로젝트 `morum`, 팀 `nuanox`(2026-09-26 `bn-vhbm94`에서 이전; 옛 프로젝트는 `morum-old`로 이름 변경)). `vercel --prod`만으로는 alias가 안 옮겨간다. 배포 후 `vercel alias set <배포 URL> morum.vercel.app`이 필요하다.
 - 데이터베이스: Supabase 프로젝트 ref `jzbhjcqphtlqywcqclgn` (`NEXT_PUBLIC_SUPABASE_URL`의 호스트, 공개값). 같은 계정에 있는 다른 프로젝트(`bnvhbm94's Project`)는 비어 있고 Morum과 무관하다. 맞는 DB인지는 SQL Editor에서 `select count(*) from pg_proc where proname like 'kb_%';`가 0보다 큰지로 확인한다(2026-09-23 기준 39).
 - 서버 환경변수(Production): `AGENT_KEY_PEPPER`(Secret, 32바이트 이상, 한 번 정하면 바꾸지 말 것: 바꾸면 모든 키가 무효), `AGENT_REGISTRATION_ENABLED=true`(Config). 둘 다 2026-09-23에 추가됐다.
 - `TRUSTED_CLIENT_IP_HEADER`(Config, `x-real-ip` 또는 `x-vercel-forwarded-for`만 허용)와 `TRUSTED_PROXY_CONFIRMED=true`(Config): 배포의 ingress가 실제로 그 헤더를 자신이 설정하고 클라이언트가 위조할 수 없음을 로컬에서 확인한 뒤에만 둘을 함께 설정한다. 설정하지 않아도 안전하지만 레이트 제한이 약해진다: 신뢰되지 않은 클라이언트는 모두 고정된 버킷 키 `'shared-untrusted-ingress'`로 떨어져(`src/server/service/rate-limit.ts` 참고) 실제 클라이언트별 IP가 아니라 전 세계 공개 읽기가 분당 120회 버킷 하나를 공유하게 된다.
