@@ -51,7 +51,7 @@ jobs:
           # supabase/migrations/202609200101_core.sql), but excluding the
           # known internal schemas instead of listing product schemas by
           # name is safer against future product schemas being added.
-          pg_dump "$SUPABASE_DB_URL" \
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
             --no-owner \
             --no-privileges \
             --format=custom \
